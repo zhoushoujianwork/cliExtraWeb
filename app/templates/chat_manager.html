@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Q Chat 管理器{% endblock %}
+
+{% block styles %}
+<style>
+    .create-instance-card {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-left: 4px solid #28a745;
+        animation: slideDown 0.3s ease-out;
+    }
+    
+    @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .instance-item {
+        transition: all 0.2s ease;
+        border-left: 3px solid transparent;
+    }
+    
+    .instance-item:hover {
+        border-left-color: #007bff;
+        background-color: #f8f9fa;
+        transform: translateX(2px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 顶部控制栏 -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+            <h4 class="mb-0"><i class="fas fa-comments"></i> Q Chat 管理器</h4>
+            <div class="d-flex align-items-center gap-2">
+                <!-- Namespace选择器 -->
+                <div class="d-flex align-items-center">
+                    <label class="form-label mb-0 me-2 small">Namespace:</label>
+                    <select id="currentNamespaceSelect" class="form-select form-select-sm" style="width: 150px;" onchange="switchNamespace()">
+                        <option value="">全部</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-primary ms-1" onclick="showNamespaceManageModal()" title="管理Namespace">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+                <div class="vr"></div>
+                <button class="btn btn-sm btn-primary" onclick="manualRefresh()">
+                    <i class="fas fa-refresh"></i> 刷新
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- 左侧：实例管理 -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-server"></i> Q CLI 实例</h5>
+                <span id="currentNamespaceLabel" class="badge bg-primary">全部</span>
+            </div>
+            <div class="card-body">
+                <div id="instancesList">
+                    {% for instance in instances %}
+                    <div class="instance-item mb-2 p-2 border rounded" data-namespace="{{ instance.namespace or '' }}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ instance.id }}</strong>
+                                <span class="badge bg-{{ 'success' if instance.status == 'running' else 'secondary' }} ms-1">
+                                    {{ instance.status }}
+                                </span>
+                                {% if instance.namespace %}
+                                <span class="badge bg-primary ms-1" title="Namespace">
+                                    <i class="fas fa-layer-group"></i> {{ instance.namespace }}
+                                </span>
+                                {% endif %}
+                                {% if instance.role %}
+                                <span class="badge bg-info ms-1" title="角色">
+                                    <i class="fas fa-user-tie"></i> {{ instance.role }}
+                                </span>
+                                {% endif %}
+                            </div>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-info" onclick="createWebTerminal('{{ instance.id }}')" title="Web终端">
+                                    <i class="fas fa-desktop"></i>
+                                </button>
+                                <button class="btn btn-danger" onclick="stopInstance('{{ instance.id }}')" title="停止">
+                                    <i class="fas fa-stop"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 中间：聊天区域 -->
+    <div class="col-md-5">
+        <div class="card" style="height: 600px;">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-comments"></i> 聊天记录</h5>
+                <button class="btn btn-success btn-sm" onclick="showCreateInstanceCard()" title="创建新实例">
+                    <i class="fas fa-plus"></i> 新增实例
+                </button>
+            </div>
+            <div class="card-body d-flex flex-column p-0">
+                <!-- 创建实例交互卡片 -->
+                <div id="createInstanceCard" class="create-instance-card p-3 border-bottom bg-light" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0"><i class="fas fa-rocket"></i> 创建新实例</h6>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="hideCreateInstanceCard()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <input type="text" id="cardInstanceName" class="form-control form-control-sm" placeholder="实例名称（可选）">
+                        </div>
+                        <div class="col-md-6">
+                            <select id="cardInstanceRole" class="form-select form-select-sm">
+                                <option value="">选择角色</option>
+                                <option value="frontend">前端工程师</option>
+                                <option value="backend">后端工程师</option>
+                                <option value="test">测试工程师</option>
+                                <option value="devops">运维工程师</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-2 d-flex gap-2">
+                        <button class="btn btn-success btn-sm" onclick="createInstanceFromCard()">
+                            <i class="fas fa-rocket"></i> 启动
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="hideCreateInstanceCard()">取消</button>
+                    </div>
+                </div>
+                
+                <!-- 聊天历史 -->
+                <div class="chat-history flex-grow-1 overflow-auto p-3" id="chatHistory">
+                    {% for msg in chat_history %}
+                    {% if msg.sender != 'system' %}
+                    <div class="message mb-2">
+                        <small class="text-muted">{{ msg.timestamp }}</small>
+                        <div class="d-flex">
+                            <strong class="me-2">{{ msg.sender }}:</strong>
+                            <span>{{ msg.message }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                
+                <!-- 发送消息 -->
+                <div class="message-input p-3 border-top">
+                    <div class="input-group">
+                        <input type="text" id="messageInput" class="form-control" placeholder="输入消息...">
+                        <button class="btn btn-primary" onclick="sendMessage()">发送</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧：系统日志 -->
+    <div class="col-md-3">
+        <div class="card" style="height: 600px;">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-cog"></i> 系统日志</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="system-logs overflow-auto p-3" id="systemLogs" style="height: 540px;">
+                    <!-- 系统日志 -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/namespace_manager_optimized.js') }}"></script>
+<script src="{{ url_for('static', filename='js/create_instance_card.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat_manager.js') }}"></script>
+{% endblock %}

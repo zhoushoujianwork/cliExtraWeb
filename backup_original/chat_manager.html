@@ -1,0 +1,403 @@
+{% extends "base.html" %}
+
+{% block title %}Q Chat Manager{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/streaming.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/web_terminal.css') }}">
+<!-- Markdown渲染和代码高亮 -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>
+    /* 优化的聊天历史样式 */
+    .chat-history, .system-logs {
+        scroll-behavior: smooth;
+    }
+    .chat-history::-webkit-scrollbar, .system-logs::-webkit-scrollbar {
+        width: 6px;
+    }
+    .chat-history::-webkit-scrollbar-track, .system-logs::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+    }
+    .chat-history::-webkit-scrollbar-thumb, .system-logs::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 3px;
+    }
+    .chat-history::-webkit-scrollbar-thumb:hover, .system-logs::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+    
+    /* 消息样式优化 */
+    .message {
+        margin-bottom: 15px;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+    }
+    
+    .message.user-message {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        margin-left: 20px;
+    }
+    
+    .message.ai-message {
+        background: #f8f9fa;
+        border-left: 4px solid #28a745;
+    }
+    
+    .message-header {
+        display: flex;
+        justify-content: between;
+        align-items: center;
+        margin-bottom: 8px;
+        font-size: 0.9em;
+        opacity: 0.8;
+    }
+    
+    .message-content {
+        line-height: 1.6;
+    }
+    
+    /* 代码块样式 */
+    .message-content pre {
+        background: #f6f8fa;
+        border: 1px solid #e1e4e8;
+        border-radius: 6px;
+        padding: 16px;
+        overflow-x: auto;
+        margin: 10px 0;
+    }
+    
+    .message-content code {
+        background: #f6f8fa;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-size: 0.9em;
+    }
+    
+    .message-content pre code {
+        background: none;
+        padding: 0;
+    }
+    
+    /* 列表样式 */
+    .message-content ul, .message-content ol {
+        padding-left: 20px;
+        margin: 10px 0;
+    }
+    
+    .message-content li {
+        margin: 5px 0;
+    }
+    
+    /* 链接样式 */
+    .message-content a {
+        color: #007bff;
+        text-decoration: none;
+    }
+    
+    .message-content a:hover {
+        text-decoration: underline;
+    }
+    
+    /* 流式消息样式 */
+    .streaming-message {
+        border-left: 4px solid #007bff !important;
+        background: linear-gradient(90deg, #f8f9fa 0%, #e9ecef 100%);
+    }
+    
+    .streaming-content {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+    
+    .typing-cursor {
+        display: inline-block;
+        color: #007bff;
+        font-weight: bold;
+        margin-left: 2px;
+    }
+    
+    @keyframes blink {
+        0%, 50% { opacity: 1; }
+        51%, 100% { opacity: 0; }
+    }
+    
+    .completed-message {
+        border-left: 4px solid #28a745 !important;
+    }
+    
+    .system-message {
+        background-color: #f8f9fa;
+        border-radius: 5px;
+    }
+    .suggestion-item {
+        cursor: pointer;
+        transition: background-color 0.2s;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .suggestion-item:last-child {
+        border-bottom: none;
+    }
+    .suggestion-item:hover, .suggestion-item.active {
+        background-color: #e3f2fd;
+    }
+    .response-content {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.6;
+    }
+    .code-block {
+        border-radius: 6px;
+        overflow: hidden;
+        border: 1px solid #e1e4e8;
+    }
+    .code-header {
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .code-block pre {
+        margin: 0;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: 0.85rem;
+        overflow-x: auto;
+    }
+    .message.border {
+        border-left: 4px solid #28a745 !important;
+        background-color: #f8f9fa;
+    }
+    #instanceSuggestions {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        background: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 顶部控制栏 -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+            <h4 class="mb-0"><i class="fas fa-comments"></i> Q Chat 管理器</h4>
+            <div>
+                <a href="/roles" class="btn btn-sm btn-info me-2">
+                    <i class="fas fa-user-cog"></i> 角色管理
+                </a>
+                <button id="refreshBtn" class="btn btn-sm btn-success" onclick="toggleAutoRefresh()">
+                    <i class="fas fa-sync"></i> 自动刷新: 开启
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="manualRefresh()">
+                    <i class="fas fa-refresh"></i> 刷新
+                </button>
+                <small class="text-muted ms-2">💬 实时推送</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- 左侧：实例管理 -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-server"></i> Q CLI 实例</h5>
+            </div>
+            <div class="card-body">
+                <!-- 启动新实例 -->
+                <div class="mb-3">
+                    <h6 class="text-muted mb-2">
+                        <i class="fas fa-plus-circle"></i> 创建新实例
+                    </h6>
+                    
+                    <!-- 实例名称 -->
+                    <div class="mb-2">
+                        <label for="newInstanceName" class="form-label small">实例名称</label>
+                        <input type="text" id="newInstanceName" class="form-control form-control-sm" 
+                               placeholder="输入实例名称（可选，留空自动生成）">
+                    </div>
+                    
+                    <!-- 工作目录 -->
+                    <div class="mb-2">
+                        <label for="newInstancePath" class="form-label small">工作目录</label>
+                        <input type="text" id="newInstancePath" class="form-control form-control-sm" 
+                               placeholder="工作目录路径（可选，默认当前目录）">
+                    </div>
+                    
+                    <!-- 角色选择 -->
+                    <div class="mb-2">
+                        <label for="newInstanceRole" class="form-label small">角色预设</label>
+                        <select id="newInstanceRole" class="form-select form-select-sm">
+                            <option value="">无角色预设</option>
+                            <option value="frontend">前端工程师</option>
+                            <option value="backend">后端工程师</option>
+                            <option value="test">测试工程师</option>
+                            <option value="reviewer">代码审查工程师</option>
+                            <option value="devops">运维工程师</option>
+                        </select>
+                    </div>
+                    
+                    <!-- 启动按钮 -->
+                    <button class="btn btn-success btn-sm w-100" onclick="startInstanceWithConfig()">
+                        <i class="fas fa-rocket"></i> 启动实例
+                    </button>
+                </div>
+                
+                <!-- 实例列表 -->
+                <div id="instancesList">
+                    {% for instance in instances %}
+                    <div class="instance-item mb-2 p-2 border rounded">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ instance.id }}</strong>
+                                <span class="badge badge-{{ 'success' if instance.status == 'running' else 'secondary' }} ms-1">
+                                    {{ instance.status }}
+                                </span>
+                                {% if instance.role %}
+                                <span class="badge badge-info ms-1" title="角色">
+                                    <i class="fas fa-user-tie"></i> {{ instance.role }}
+                                </span>
+                                {% endif %}
+                            </div>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-info" onclick="createWebTerminal('{{ instance.id }}')" title="Web终端接管">
+                                    <i class="fas fa-desktop"></i>
+                                </button>
+                                <button class="btn btn-danger" onclick="stopInstance('{{ instance.id }}')" title="停止实例">
+                                    <i class="fas fa-stop"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="instance-details mt-1">
+                            {% if instance.path %}
+                            <small class="text-muted d-block">
+                                <i class="fas fa-folder"></i> {{ instance.path }}
+                            </small>
+                            {% endif %}
+                            {% if instance.start_time %}
+                            <small class="text-muted d-block">
+                                <i class="fas fa-clock"></i> {{ instance.start_time }}
+                            </small>
+                            {% endif %}
+                            {% if instance.screen_session %}
+                            <small class="text-muted d-block">
+                                <i class="fas fa-terminal"></i> {{ instance.screen_session }}
+                            </small>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <button class="btn btn-warning btn-sm mt-2" onclick="cleanAll()">清理所有</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 中间：聊天界面 -->
+    <div class="col-md-5">
+        <div class="card" style="height: 600px;">
+            <div class="card-header">
+                <h5><i class="fas fa-comments"></i> 聊天记录</h5>
+            </div>
+            <div class="card-body d-flex flex-column p-0">
+                <!-- 聊天历史 -->
+                <div class="chat-history flex-grow-1 overflow-auto p-3" id="chatHistory" style="max-height: 500px;">
+                    {% for msg in chat_history %}
+                    {% if msg.sender != 'system' %}
+                    <div class="message mb-2">
+                        <small class="text-muted">{{ msg.timestamp }}</small>
+                        <div class="d-flex">
+                            <strong class="me-2 {{ 'text-primary' if msg.sender == 'user' else 'text-success' }}">{{ msg.sender }}:</strong>
+                            <span style="white-space: pre-wrap;">{{ msg.message }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                
+                <!-- 发送消息 -->
+                <div class="message-input p-3 border-top">
+                    <div class="row">
+                        <div class="col-10">
+                            <div class="position-relative">
+                                <input type="text" id="messageInput" class="form-control form-control-sm" 
+                                       placeholder="输入消息... (使用@选择实例，如: @实例1 你好)">
+                                <!-- @提示下拉框 -->
+                                <div id="instanceSuggestions" class="position-absolute w-100" 
+                                     style="top: 100%; z-index: 1000; display: none; max-height: 250px; overflow-y: auto;">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-2">
+                            <button class="btn btn-primary btn-sm" onclick="sendMessage()">发送</button>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> 
+                            使用 @ 符号选择实例发送消息
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 右侧：系统日志 -->
+    <div class="col-md-3">
+        <div class="card" style="height: 600px;">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-cog"></i> 系统日志</h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearSystemLogs()">
+                    <i class="fas fa-trash"></i> 清空
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="system-logs overflow-auto p-3" id="systemLogs" style="height: 540px; font-size: 0.85em;">
+                    <!-- 系统日志将在这里显示 -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Socket.IO库 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.js"></script>
+<!-- Web终端组件 -->
+<script src="{{ url_for('static', filename='js/web_terminal.js') }}"></script>
+
+<!-- Markdown渲染和代码高亮 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+
+<script>
+// 初始化代码高亮
+hljs.highlightAll();
+
+// 配置marked选项
+marked.setOptions({
+    highlight: function(code, lang) {
+        if (lang && hljs.getLanguage(lang)) {
+            try {
+                return hljs.highlight(code, { language: lang }).value;
+            } catch (err) {}
+        }
+        return hljs.highlightAuto(code).value;
+    },
+    breaks: true,
+    gfm: true
+});
+</script>
+
+<script src="{{ url_for('static', filename='js/streaming_optimizer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat_manager.js') }}"></script>
+{% endblock %}
