@@ -6,6 +6,7 @@ from flask_socketio import emit, join_room, leave_room
 import threading
 import time
 import logging
+import subprocess
 
 from app import socketio
 from app.services.instance_manager import instance_manager
@@ -258,23 +259,29 @@ def handle_join_terminal(data):
         # 检查tmux会话是否存在
         result = subprocess.run(['tmux', 'list-sessions'], capture_output=True, text=True)
         if result.returncode != 0 or session_name not in result.stdout:
+            logger.error(f'tmux会话 {session_name} 不存在。当前会话: {result.stdout}')
             emit('terminal_error', {
                 'instance_id': instance_id,
                 'error': f'tmux会话 {session_name} 不存在'
             })
             return
         
+        logger.info(f'tmux会话 {session_name} 存在，开始创建Web终端连接')
+        
         # 创建Web终端连接
         from app.services.web_terminal import web_terminal_manager
         
         def output_callback(inst_id, output):
             """终端输出回调"""
+            logger.debug(f'终端输出 {inst_id}: {repr(output[:100])}...')
             socketio.emit('terminal_output', {
                 'instance_id': inst_id,
                 'output': output
             }, room=f'terminal_{inst_id}')
         
+        logger.info(f'调用 web_terminal_manager.create_terminal({instance_id}, callback)')
         success = web_terminal_manager.create_terminal(instance_id, output_callback)
+        logger.info(f'web_terminal_manager.create_terminal 返回: {success}')
         
         if success:
             emit('terminal_connected', {
@@ -283,6 +290,7 @@ def handle_join_terminal(data):
             })
             logger.info(f'Web终端连接成功: {instance_id}')
         else:
+            logger.error(f'web_terminal_manager.create_terminal 返回 False，无法创建Web终端连接')
             emit('terminal_error', {
                 'instance_id': instance_id,
                 'error': '无法创建Web终端连接'
@@ -342,6 +350,30 @@ def handle_terminal_input(data):
             'instance_id': instance_id,
             'error': str(e)
         })
+
+@socketio.on('terminal_resize')
+def handle_terminal_resize(data):
+    """处理Web终端大小调整"""
+    try:
+        instance_id = data.get('instance_id')
+        rows = data.get('rows')
+        cols = data.get('cols')
+        
+        if not instance_id or not rows or not cols:
+            logger.error(f'终端大小调整参数不完整: {data}')
+            return
+        
+        from app.services.web_terminal import web_terminal_manager
+        
+        success = web_terminal_manager.resize_terminal(instance_id, rows, cols)
+        
+        if success:
+            logger.info(f'终端大小已调整: {instance_id} -> {cols}x{rows}')
+        else:
+            logger.warning(f'终端大小调整失败: {instance_id}')
+            
+    except Exception as e:
+        logger.error(f'处理终端大小调整失败: {str(e)}')
 
 @socketio.on('terminal_detach')
 def handle_terminal_detach(data):

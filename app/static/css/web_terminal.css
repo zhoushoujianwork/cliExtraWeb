@@ -1,202 +1,128 @@
-/* Web终端样式 */
-
-.web-terminal-modal {
-    z-index: 1060;
-}
-
-.web-terminal-modal .modal-dialog {
-    max-width: 90vw;
-    width: 90vw;
-    height: 90vh;
-    margin: 5vh auto;
-}
+/* Web终端响应式样式 */
 
 .web-terminal-modal .modal-content {
-    height: 100%;
     display: flex;
     flex-direction: column;
+    height: 90vh;
+    max-height: 90vh;
+}
+
+.web-terminal-modal .modal-header {
+    flex-shrink: 0;
+    border-bottom: 1px solid #495057;
 }
 
 .web-terminal-modal .modal-body {
     flex: 1;
+    display: flex;
+    flex-direction: column;
     padding: 0;
     overflow: hidden;
 }
 
-.web-terminal-container {
-    width: 100%;
-    height: 100%;
-    background-color: #1e1e1e;
-    color: #d4d4d4;
-    font-family: 'Fira Code', 'Courier New', monospace;
-    font-size: 14px;
-    line-height: 1.4;
-    position: relative;
+.web-terminal-modal .modal-footer {
+    flex-shrink: 0;
+    border-top: 1px solid #495057;
 }
 
-.web-terminal {
-    width: 100%;
-    height: calc(100% - 40px);
-    padding: 15px;
-    overflow-y: auto;
-    overflow-x: auto;
-    white-space: pre;
-    word-wrap: break-word;
-    background-color: #1e1e1e;
-    color: #d4d4d4;
-    border: none;
-    outline: none;
-    resize: none;
-    font-family: 'Fira Code', 'Courier New', monospace;
-    font-size: 14px;
-    line-height: 1.4;
+/* xterm容器样式 */
+.web-terminal-modal .xterm {
+    height: 100% !important;
+    width: 100% !important;
 }
 
-.web-terminal:focus {
-    outline: none;
-    box-shadow: none;
+.web-terminal-modal .xterm-viewport {
+    overflow-y: auto !important;
 }
 
-.web-terminal-input {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 40px;
-    background-color: #2d2d30;
-    border: none;
-    color: #d4d4d4;
-    padding: 10px 15px;
-    font-family: 'Fira Code', 'Courier New', monospace;
-    font-size: 14px;
-    border-top: 1px solid #3e3e42;
+.web-terminal-modal .xterm-screen {
+    height: 100% !important;
 }
 
-.web-terminal-input:focus {
-    outline: none;
-    background-color: #383838;
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .web-terminal-modal .modal-content {
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+    
+    .web-terminal-modal .modal-dialog {
+        margin: 0;
+        max-width: 100%;
+        height: 100vh;
+    }
 }
 
-.web-terminal-toolbar {
-    background-color: #2c3e50;
-    padding: 8px 15px;
-    border-bottom: 1px solid #34495e;
+/* 确保终端容器能够正确伸缩 */
+.web-terminal-modal [id^="xterm-container-"] {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.web-terminal-title {
-    color: #fff;
-    margin: 0;
-    font-size: 14px;
-    font-weight: 500;
-}
-
-.web-terminal-controls {
-    display: flex;
-    gap: 8px;
-}
-
-.web-terminal-btn {
-    padding: 4px 8px;
-    font-size: 12px;
-    border: none;
-    border-radius: 3px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.web-terminal-btn-detach {
-    background-color: #f39c12;
-    color: #fff;
-}
-
-.web-terminal-btn-detach:hover {
-    background-color: #e67e22;
-}
-
-.web-terminal-btn-terminate {
-    background-color: #e74c3c;
-    color: #fff;
-}
-
-.web-terminal-btn-terminate:hover {
-    background-color: #c0392b;
-}
-
-.web-terminal-btn-close {
-    background-color: #95a5a6;
-    color: #fff;
-}
-
-.web-terminal-btn-close:hover {
-    background-color: #7f8c8d;
-}
-
-.web-terminal-status {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background-color: rgba(0, 0, 0, 0.7);
-    color: #fff;
-    padding: 4px 8px;
-    border-radius: 3px;
-    font-size: 12px;
-    z-index: 10;
-}
-
-.web-terminal-status.connected {
-    background-color: rgba(39, 174, 96, 0.8);
-}
-
-.web-terminal-status.disconnected {
-    background-color: rgba(231, 76, 60, 0.8);
+    flex-direction: column;
+    flex: 1;
+    min-height: 0; /* 重要：允许flex子项收缩 */
 }
 
 /* 滚动条样式 */
-.web-terminal::-webkit-scrollbar {
+.web-terminal-modal .xterm-viewport::-webkit-scrollbar {
     width: 8px;
 }
 
-.web-terminal::-webkit-scrollbar-track {
-    background: #333;
+.web-terminal-modal .xterm-viewport::-webkit-scrollbar-track {
+    background: #2d2d2d;
 }
 
-.web-terminal::-webkit-scrollbar-thumb {
-    background: #666;
+.web-terminal-modal .xterm-viewport::-webkit-scrollbar-thumb {
+    background: #555;
     border-radius: 4px;
 }
 
-.web-terminal::-webkit-scrollbar-thumb:hover {
-    background: #888;
+.web-terminal-modal .xterm-viewport::-webkit-scrollbar-thumb:hover {
+    background: #777;
 }
 
-/* 光标样式 */
-.web-terminal-cursor {
-    background-color: #fff;
-    color: #000;
-    animation: blink 1s infinite;
+/* 连接状态指示器 */
+.web-terminal-modal .badge {
+    font-size: 0.75em;
 }
 
-@keyframes blink {
-    0%, 50% { opacity: 1; }
-    51%, 100% { opacity: 0; }
+/* 工具栏按钮 */
+.web-terminal-modal .modal-header .btn {
+    font-size: 0.875em;
 }
 
-/* 响应式设计 */
-@media (max-width: 768px) {
-    .web-terminal-modal .modal-dialog {
-        width: 95vw;
-        height: 95vh;
-        margin: 2.5vh auto;
+/* 确保模态框在不同屏幕尺寸下的表现 */
+@media (min-width: 1200px) {
+    .web-terminal-modal .modal-xl {
+        max-width: 95%;
     }
-    
-    .web-terminal {
-        font-size: 12px;
+}
+
+@media (min-width: 992px) and (max-width: 1199px) {
+    .web-terminal-modal .modal-xl {
+        max-width: 90%;
     }
-    
-    .web-terminal-input {
-        font-size: 12px;
-    }
+}
+
+/* 全屏模式支持 */
+.web-terminal-modal.fullscreen .modal-dialog {
+    max-width: 100%;
+    margin: 0;
+}
+
+.web-terminal-modal.fullscreen .modal-content {
+    height: 100vh;
+    border-radius: 0;
+}
+
+/* 加载状态 */
+.web-terminal-modal .terminal-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: #6c757d;
+}
+
+.web-terminal-modal .terminal-loading .spinner-border {
+    margin-right: 10px;
 }

@@ -167,18 +167,23 @@ class WebTerminalManager:
                 import json
                 data = json.loads(result.stdout.strip())
                 
-                # 单个实例查询的格式是 {"instance": {...}}
-                instance_data = data.get('instance', {})
-                if instance_data:
-                    session = instance_data.get('session', '')
+                # 单个实例查询直接返回实例对象
+                if isinstance(data, dict):
+                    session = data.get('session', '')
                     if session:
+                        logger.info(f"获取到实例 {instance_id} 的会话名称: {session}")
                         return session
                     
-                    # 如果没有session字段，尝试从commands.attach解析
-                    commands = data.get('commands', {})
-                    attach_command = commands.get('attach', '')
+                    # 如果没有session字段，尝试从attach_command解析
+                    attach_command = data.get('attach_command', '')
                     if 'tmux attach-session -t ' in attach_command:
-                        return attach_command.replace('tmux attach-session -t ', '').strip()
+                        session = attach_command.replace('tmux attach-session -t ', '').strip()
+                        logger.info(f"从attach_command解析到会话名称: {session}")
+                        return session
+                
+                logger.error(f"实例 {instance_id} 的JSON数据中没有找到会话信息: {data}")
+            else:
+                logger.error(f"cliExtra list {instance_id} 命令失败: {result.stderr}")
             
             return None
         except Exception as e:

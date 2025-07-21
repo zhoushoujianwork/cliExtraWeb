@@ -153,10 +153,6 @@ Desktop.ini
 
 .cliExtra/
 
-issues/
-issue/image copy 2.png
-issue/image copy 3.png
-issue/image copy 4.png
-issue/image copy 5.png
-issue/image copy.png
-issue/image.png
+issue/*
+test/*
+tests/*

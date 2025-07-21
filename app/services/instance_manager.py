@@ -1,6 +1,7 @@
 """
 基于tmux的Q CLI实例管理器
 支持用户随时接管终端，同时支持程序化交互
+支持基于namespace的会话历史和新的目录结构
 """
 import subprocess
 import threading
@@ -8,6 +9,8 @@ import time
 import logging
 import os
 import re
+import json
+import platform
 from datetime import datetime
 from typing import Dict, List, Optional
 from queue import Queue, Empty
@@ -18,20 +21,36 @@ from config.config import Config
 logger = logging.getLogger(__name__)
 
 class InstanceManager:
-    """Q CLI实例管理器 - 基于cliExtra命令实现"""
+    """Q CLI实例管理器 - 基于cliExtra命令实现，支持namespace和会话历史"""
     
     def __init__(self):
         self.instances = {}
         self._lock = threading.Lock()
         self._start_lock = threading.Lock()
+        
+        # 根据系统类型确定工作目录
+        self.work_dir = self._get_work_directory()
         self.sessions_dir = os.path.join(os.path.dirname(__file__), 'sessions')
         self.log_file = "/tmp/tmux_q_chat.log"
+        
         self._ensure_directories()
         self._check_tmux()
+    
+    def _get_work_directory(self):
+        """根据系统类型获取cliExtra工作目录"""
+        system = platform.system()
+        if system == "Darwin":  # macOS
+            return os.path.expanduser("~/Library/Application Support/cliExtra")
+        elif system == "Linux":
+            return "/opt/cliExtra"
+        else:
+            # Windows或其他系统，使用用户目录
+            return os.path.expanduser("~/.cliExtra")
     
     def _ensure_directories(self):
         """确保必要的目录存在"""
         os.makedirs(self.sessions_dir, exist_ok=True)
+        os.makedirs(self.work_dir, exist_ok=True)
     
     def _check_tmux(self):
         """检查tmux是否安装"""
@@ -42,6 +61,28 @@ class InstanceManager:
         """检查cliExtra命令是否可用"""
         if not subprocess.run(['which', 'cliExtra'], capture_output=True).returncode == 0:
             raise RuntimeError("cliExtra命令未安装")
+    
+    def get_namespace_instances_dir(self, namespace='default'):
+        """获取指定namespace的实例目录"""
+        return os.path.join(self.work_dir, 'namespaces', namespace, 'instances')
+    
+    def get_namespace_logs_dir(self, namespace='default'):
+        """获取指定namespace的日志目录"""
+        return os.path.join(self.work_dir, 'namespaces', namespace, 'logs')
+    
+    def get_namespace_conversations_dir(self, namespace='default'):
+        """获取指定namespace的对话记录目录"""
+        return os.path.join(self.work_dir, 'namespaces', namespace, 'conversations')
+    
+    def get_instance_tmux_log_path(self, instance_id, namespace='default'):
+        """获取实例的tmux日志文件路径"""
+        instances_dir = self.get_namespace_instances_dir(namespace)
+        return os.path.join(instances_dir, instance_id, 'tmux.log')
+    
+    def get_instance_conversation_path(self, instance_id, namespace='default'):
+        """获取实例的对话记录文件路径"""
+        conversations_dir = self.get_namespace_conversations_dir(namespace)
+        return os.path.join(conversations_dir, f'{instance_id}.json')
     
     def sync_screen_instances(self):
         """同步tmux实例状态 - 使用cliExtra list --json命令"""
@@ -56,7 +97,6 @@ class InstanceManager:
                 return
             
             # 解析JSON输出
-            import json
             try:
                 data = json.loads(result.stdout.strip())
                 instances_data = data.get('instances', [])
@@ -84,6 +124,8 @@ class InstanceManager:
                         instance.status = 'running' if instance_data.get('status') == 'Attached' else instance_data.get('status', 'unknown')
                         instance.screen_session = instance_data.get('session', '')  # tmux session
                         instance.namespace = instance_data.get('namespace', 'default')  # 直接从JSON获取namespace
+                        instance.project_path = instance_data.get('project_path', '')
+                        instance.role = instance_data.get('role', '')
                         
                         # 从attach_command提取更多信息
                         attach_command = instance_data.get('attach_command', '')
@@ -114,22 +156,9 @@ class InstanceManager:
                             # 如果获取详细信息失败，使用基本信息
                             pass
                         
-                        # 构建详细信息显示
-                        details = [f'cliExtra实例: {instance_id}']
-                        if instance.status:
-                            details.append(f'状态: {instance.status}')
-                        if instance.namespace and instance.namespace != 'default':
-                            details.append(f'命名空间: {instance.namespace}')
-                        if instance.path:
-                            details.append(f'路径: {instance.path}')
-                        if instance.role:
-                            details.append(f'角色: {instance.role}')
-                        if instance.start_time:
-                            details.append(f'启动时间: {instance.start_time}')
-                        if instance.screen_session:
-                            details.append(f'tmux会话: {instance.screen_session}')
-                        
-                        instance.details = ' | '.join(details)
+                        # 简化详细信息显示 - 只保留基本状态
+                        # 不再生成复杂的details字段，让前端决定如何显示
+                        instance.details = f'{instance.status}'
                 
                 # 移除不存在的实例
                 with self._lock:
@@ -197,37 +226,348 @@ class InstanceManager:
             logger.error(f'向cliExtra实例 {instance_id} 发送消息失败: {str(e)}')
             return {'success': False, 'error': str(e)}
     
-    def get_instance_output(self, instance_id: str, last_position: int = 0) -> List[Dict[str, any]]:
-        """获取cliExtra实例输出 - 使用cliExtra logs命令"""
+    def stop_instance(self, instance_id: str) -> Dict[str, any]:
+        """停止cliExtra实例"""
         try:
             self._check_cliExtra()
             
-            # 使用cliExtra logs命令获取日志
+            result = subprocess.run(
+                ['cliExtra', 'stop', instance_id],
+                capture_output=True, text=True, timeout=10
+            )
+            
+            # 从实例列表中移除
+            with self._lock:
+                if instance_id in self.instances:
+                    del self.instances[instance_id]
+            
+            if result.returncode == 0:
+                logger.info(f'cliExtra实例 {instance_id} 已停止')
+                return {'success': True}
+            else:
+                error_msg = result.stderr or result.stdout
+                logger.error(f'停止cliExtra实例 {instance_id} 失败: {error_msg}')
+                return {'success': False, 'error': error_msg}
+                
+        except subprocess.TimeoutExpired:
+            error_msg = '停止实例超时'
+            logger.error(f'停止cliExtra实例 {instance_id} 超时')
+            return {'success': False, 'error': error_msg}
+        except Exception as e:
+            logger.error(f'停止cliExtra实例 {instance_id} 失败: {str(e)}')
+            return {'success': False, 'error': str(e)}
+    
+    def clean_instance(self, instance_id: str) -> Dict[str, any]:
+        """清理cliExtra实例数据"""
+        try:
+            self._check_cliExtra()
+            
+            result = subprocess.run(
+                ['cliExtra', 'clean', instance_id],
+                capture_output=True, text=True, timeout=10
+            )
+            
+            # 从实例列表中移除
+            with self._lock:
+                if instance_id in self.instances:
+                    del self.instances[instance_id]
+            
+            if result.returncode == 0:
+                logger.info(f'cliExtra实例 {instance_id} 数据已清理')
+                return {'success': True}
+            else:
+                error_msg = result.stderr or result.stdout
+                logger.error(f'清理cliExtra实例 {instance_id} 失败: {error_msg}')
+                return {'success': False, 'error': error_msg}
+                
+        except subprocess.TimeoutExpired:
+            error_msg = '清理实例超时'
+            logger.error(f'清理cliExtra实例 {instance_id} 超时')
+            return {'success': False, 'error': error_msg}
+        except Exception as e:
+            logger.error(f'清理cliExtra实例 {instance_id} 失败: {str(e)}')
+            return {'success': False, 'error': str(e)}
+    
+    def restart_instance(self, instance_id: str) -> Dict[str, any]:
+        """重新启动cliExtra实例"""
+        try:
+            self._check_cliExtra()
+            
+            # 使用cliExtra start命令重新启动实例
+            result = subprocess.run(
+                ['cliExtra', 'start', '--name', instance_id],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            if result.returncode == 0:
+                logger.info(f'cliExtra实例 {instance_id} 已重新启动')
+                # 重新同步实例状态
+                self.sync_screen_instances()
+                return {'success': True}
+            else:
+                error_msg = result.stderr or result.stdout
+                logger.error(f'重启cliExtra实例 {instance_id} 失败: {error_msg}')
+                return {'success': False, 'error': error_msg}
+                
+        except subprocess.TimeoutExpired:
+            error_msg = '重启实例超时'
+            logger.error(f'重启cliExtra实例 {instance_id} 超时')
+            return {'success': False, 'error': error_msg}
+        except Exception as e:
+            logger.error(f'重启cliExtra实例 {instance_id} 失败: {str(e)}')
+            return {'success': False, 'error': str(e)}
+    
+    def get_instance_output(self, instance_id: str, last_position: int = 0) -> List[Dict[str, any]]:
+        """获取cliExtra实例输出 - 支持新的基于namespace的目录结构"""
+        try:
+            # 首先尝试获取实例的namespace信息
+            instance_namespace = 'default'
+            with self._lock:
+                if instance_id in self.instances:
+                    instance_namespace = self.instances[instance_id].namespace or 'default'
+            
+            # 尝试从tmux日志文件读取（新的目录结构）
+            tmux_log_path = self.get_instance_tmux_log_path(instance_id, instance_namespace)
+            
+            if os.path.exists(tmux_log_path):
+                return self._read_tmux_log_file(tmux_log_path, last_position)
+            
+            # 如果新路径不存在，尝试使用cliExtra logs命令作为备选
+            self._check_cliExtra()
+            
             result = subprocess.run(
                 ['cliExtra', 'logs', instance_id, '50'],  # 获取最近50行
                 capture_output=True, text=True, timeout=10
             )
             
             if result.returncode == 0:
-                lines = result.stdout.strip().split('\n')
+                lines = result.stdout.strip().split('\n') if result.stdout.strip() else []
                 output = []
                 for i, line in enumerate(lines):
                     if i >= last_position:
                         output.append({
                             'type': 'output',
                             'content': line,
-                            'timestamp': time.time()
+                            'timestamp': time.time(),
+                            'new_position': i + 1
                         })
                 return output
             else:
-                logger.error(f'获取cliExtra实例 {instance_id} 日志失败: {result.stderr}')
+                logger.warning(f'获取cliExtra实例 {instance_id} 日志失败: {result.stderr}')
                 return []
                 
         except Exception as e:
             logger.error(f'获取cliExtra实例 {instance_id} 输出失败: {str(e)}')
             return []
     
-    def stop_instance(self, instance_id: str) -> Dict[str, any]:
+    def _read_tmux_log_file(self, log_path: str, last_position: int = 0) -> List[Dict[str, any]]:
+        """从tmux日志文件读取输出"""
+        try:
+            if not os.path.exists(log_path):
+                return []
+            
+            with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                # 跳到指定位置
+                if last_position > 0:
+                    f.seek(last_position)
+                
+                content = f.read()
+                current_position = f.tell()
+                
+                if not content:
+                    return []
+                
+                # 按行分割并处理
+                lines = content.split('\n')
+                output = []
+                
+                for line in lines:
+                    if line.strip():  # 忽略空行
+                        output.append({
+                            'type': 'output',
+                            'content': line,
+                            'timestamp': time.time(),
+                            'new_position': current_position,
+                            'is_streaming': True
+                        })
+                
+                return output
+                
+        except Exception as e:
+            logger.error(f'读取tmux日志文件失败 {log_path}: {str(e)}')
+            return []
+    
+    def get_conversation_history(self, instance_id: str, namespace: str = None) -> List[Dict[str, any]]:
+        """获取实例的对话历史记录"""
+        try:
+            if namespace is None:
+                # 尝试从实例信息获取namespace
+                with self._lock:
+                    if instance_id in self.instances:
+                        namespace = self.instances[instance_id].namespace or 'default'
+                    else:
+                        namespace = 'default'
+            
+            conversation_path = self.get_instance_conversation_path(instance_id, namespace)
+            
+            if not os.path.exists(conversation_path):
+                return []
+            
+            with open(conversation_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get('conversations', [])
+                
+        except Exception as e:
+            logger.error(f'获取实例 {instance_id} 对话历史失败: {str(e)}')
+            return []
+    
+    def save_conversation_message(self, instance_id: str, sender: str, message: str, namespace: str = None):
+        """保存对话消息到历史记录"""
+        try:
+            if namespace is None:
+                # 尝试从实例信息获取namespace
+                with self._lock:
+                    if instance_id in self.instances:
+                        namespace = self.instances[instance_id].namespace or 'default'
+                    else:
+                        namespace = 'default'
+            
+            conversation_path = self.get_instance_conversation_path(instance_id, namespace)
+            conversations_dir = os.path.dirname(conversation_path)
+            
+            # 确保目录存在
+            os.makedirs(conversations_dir, exist_ok=True)
+            
+            # 读取现有记录
+            conversations = []
+            if os.path.exists(conversation_path):
+                with open(conversation_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    conversations = data.get('conversations', [])
+            
+            # 添加新消息
+            new_message = {
+                'timestamp': datetime.now().isoformat(),
+                'sender': sender,
+                'message': message,
+                'instance_id': instance_id,
+                'namespace': namespace
+            }
+            conversations.append(new_message)
+            
+            # 保持最近1000条记录
+            if len(conversations) > 1000:
+                conversations = conversations[-1000:]
+            
+            # 保存到文件
+            data = {
+                'instance_id': instance_id,
+                'namespace': namespace,
+                'last_updated': datetime.now().isoformat(),
+                'conversations': conversations
+            }
+            
+            with open(conversation_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+                
+        except Exception as e:
+            logger.error(f'保存对话消息失败 {instance_id}: {str(e)}')
+    
+    def get_namespace_conversation_history(self, namespace: str, limit: int = 100) -> List[Dict[str, any]]:
+        """获取指定namespace的所有对话历史"""
+        try:
+            conversations_dir = self.get_namespace_conversations_dir(namespace)
+            
+            if not os.path.exists(conversations_dir):
+                return []
+            
+            all_conversations = []
+            
+            # 遍历namespace下的所有对话文件
+            for filename in os.listdir(conversations_dir):
+                if filename.endswith('.json'):
+                    file_path = os.path.join(conversations_dir, filename)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                            conversations = data.get('conversations', [])
+                            all_conversations.extend(conversations)
+                    except Exception as e:
+                        logger.warning(f'读取对话文件失败 {file_path}: {str(e)}')
+            
+            # 按时间排序并限制数量
+            all_conversations.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+            return all_conversations[:limit]
+            
+        except Exception as e:
+            logger.error(f'获取namespace {namespace} 对话历史失败: {str(e)}')
+            return []
+    
+    def replay_conversations(self, target_type: str, target_name: str, limit: int = 50, since: str = None) -> Dict[str, any]:
+        """回放对话记录 - 支持实例和namespace级别"""
+        try:
+            self._check_cliExtra()
+            
+            cmd = ['cliExtra', 'replay', target_type, target_name]
+            
+            if limit:
+                cmd.extend(['--limit', str(limit)])
+            
+            if since:
+                cmd.extend(['--since', since])
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                # 尝试解析JSON输出
+                try:
+                    data = json.loads(result.stdout)
+                    return {'success': True, 'data': data}
+                except json.JSONDecodeError:
+                    # 如果不是JSON，返回原始文本
+                    return {'success': True, 'data': {'text': result.stdout}}
+            else:
+                return {'success': False, 'error': result.stderr or result.stdout}
+                
+        except Exception as e:
+            logger.error(f'回放对话记录失败: {str(e)}')
+            return {'success': False, 'error': str(e)}
+    
+    def get_available_namespaces(self) -> List[Dict[str, any]]:
+        """获取所有可用的namespace"""
+        try:
+            namespaces_dir = os.path.join(self.work_dir, 'namespaces')
+            
+            if not os.path.exists(namespaces_dir):
+                return [{'name': 'default', 'instance_count': 0}]
+            
+            namespaces = []
+            
+            for ns_name in os.listdir(namespaces_dir):
+                ns_path = os.path.join(namespaces_dir, ns_name)
+                if os.path.isdir(ns_path):
+                    # 统计实例数量
+                    instances_dir = os.path.join(ns_path, 'instances')
+                    instance_count = 0
+                    if os.path.exists(instances_dir):
+                        instance_count = len([d for d in os.listdir(instances_dir) 
+                                            if os.path.isdir(os.path.join(instances_dir, d))])
+                    
+                    namespaces.append({
+                        'name': ns_name,
+                        'instance_count': instance_count,
+                        'path': ns_path
+                    })
+            
+            # 确保default namespace存在
+            if not any(ns['name'] == 'default' for ns in namespaces):
+                namespaces.append({'name': 'default', 'instance_count': 0})
+            
+            return sorted(namespaces, key=lambda x: x['name'])
+            
+        except Exception as e:
+            logger.error(f'获取namespace列表失败: {str(e)}')
+            return [{'name': 'default', 'instance_count': 0}]
         """停止cliExtra实例"""
         try:
             self._check_cliExtra()
@@ -261,7 +601,8 @@ class InstanceManager:
     def create_instance_with_config(self, name: Optional[str] = None, 
                                    path: Optional[str] = None, 
                                    role: Optional[str] = None,
-                                   namespace: Optional[str] = None) -> Dict[str, any]:
+                                   namespace: Optional[str] = None,
+                                   tools: Optional[List[str]] = None) -> Dict[str, any]:
         """创建带配置的cliExtra实例"""
         try:
             def create_worker():
@@ -285,6 +626,11 @@ class InstanceManager:
                         # 添加角色参数（如果指定）
                         if role:
                             cmd.extend(['--role', role])
+                        
+                        # 添加工具参数（如果指定）
+                        if tools and isinstance(tools, list):
+                            for tool in tools:
+                                cmd.extend(['--tool', tool])
                         
                         logger.info(f'启动cliExtra实例，命令: {" ".join(cmd)}')
                         

@@ -59,6 +59,58 @@ def start_instance_with_config():
         chat_manager.add_system_log(error_msg)
         return jsonify({'success': False, 'error': error_msg}), 500
 
+@bp.route('/create_instance', methods=['POST'])
+def create_instance_api():
+    """创建新实例API"""
+    try:
+        data = request.get_json() or {}
+        instance_id = data.get('instance_id', '').strip()
+        project_path = data.get('project_path', '').strip()
+        role = data.get('role', '').strip()
+        namespace = data.get('namespace', '').strip()
+        tools = data.get('tools', [])
+        
+        # 构建参数
+        kwargs = {}
+        if instance_id:
+            kwargs['name'] = instance_id
+        if project_path:
+            kwargs['path'] = project_path
+        if role:
+            kwargs['role'] = role
+        if namespace:
+            kwargs['namespace'] = namespace
+        if tools:
+            kwargs['tools'] = tools
+        
+        result = instance_manager.create_instance_with_config(**kwargs)
+        
+        if result['success']:
+            final_instance_id = result.get('instance_id', instance_id or 'auto-generated')
+            chat_manager.add_system_log(f'实例 {final_instance_id} 创建成功')
+            
+            if namespace:
+                chat_manager.add_system_log(f'实例 {final_instance_id} 已设置namespace: {namespace}')
+            if role:
+                chat_manager.add_system_log(f'实例 {final_instance_id} 已应用角色: {role}')
+            if tools:
+                chat_manager.add_system_log(f'实例 {final_instance_id} 已安装工具: {", ".join(tools)}')
+                
+            return jsonify({
+                'success': True,
+                'instance_id': final_instance_id,
+                'message': f'实例 {final_instance_id} 创建成功'
+            })
+        else:
+            chat_manager.add_system_log(f'实例创建失败: {result["error"]}')
+            return jsonify(result), 400
+            
+    except Exception as e:
+        logger.error(f"创建实例失败: {str(e)}")
+        error_msg = f'创建实例失败: {str(e)}'
+        chat_manager.add_system_log(error_msg)
+        return jsonify({'success': False, 'error': error_msg}), 500
+
 # 添加标准的实例创建API
 @bp.route('/instances', methods=['POST'])
 def create_instance():
@@ -125,6 +177,79 @@ def stop_instance(instance_id):
         error_msg = f'停止tmux实例失败: {str(e)}'
         chat_manager.add_system_log(error_msg)
         return jsonify({'success': False, 'error': error_msg}), 500
+
+@bp.route('/clean/<instance_id>', methods=['POST'])
+def clean_instance(instance_id):
+    """清理实例数据"""
+    try:
+        result = instance_manager.clean_instance(instance_id)
+        if result['success']:
+            chat_manager.add_system_log(f'实例 {instance_id} 数据已清理')
+            return jsonify({'success': True, 'message': f'实例 {instance_id} 已清理'})
+        else:
+            logger.error(f'清理实例 {instance_id} 失败: {result.get("error", "未知错误")}')
+            return jsonify({'success': False, 'error': result.get('error', '清理失败')}), 500
+    except Exception as e:
+        logger.error(f'清理实例 {instance_id} 失败: {str(e)}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@bp.route('/restart/<instance_id>', methods=['POST'])
+def restart_instance(instance_id):
+    """重新启动实例"""
+    try:
+        # 首先尝试停止实例（如果还在运行）
+        try:
+            instance_manager.stop_instance(instance_id)
+        except:
+            pass  # 忽略停止失败，可能实例已经停止
+        
+        # 重新启动实例
+        result = instance_manager.restart_instance(instance_id)
+        if result['success']:
+            chat_manager.add_system_log(f'实例 {instance_id} 已重新启动')
+            return jsonify({'success': True, 'message': f'实例 {instance_id} 已重新启动'})
+        else:
+            logger.error(f'重启实例 {instance_id} 失败: {result.get("error", "未知错误")}')
+            return jsonify({'success': False, 'error': result.get('error', '重启失败')}), 500
+    except Exception as e:
+        logger.error(f'重启实例 {instance_id} 失败: {str(e)}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@bp.route('/instances/<instance_id>/details', methods=['GET'])
+def get_instance_details(instance_id):
+    """获取实例详细信息"""
+    try:
+        # 使用cliExtra命令获取详细信息
+        result = subprocess.run(
+            ['cliExtra', 'list', instance_id, '--json'],
+            capture_output=True, text=True, timeout=10
+        )
+        
+        if result.returncode == 0:
+            import json
+            instance_data = json.loads(result.stdout.strip())
+            
+            return jsonify({
+                'success': True,
+                'instance': instance_data
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'实例 {instance_id} 不存在或获取信息失败'
+            }), 404
+            
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            'success': False,
+            'error': '获取实例详情超时'
+        }), 500
+    except Exception as e:
+        logger.error(f'获取实例 {instance_id} 详情失败: {str(e)}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @bp.route('/send', methods=['POST'])
 def send_message():
@@ -210,11 +335,243 @@ def clear_logs():
         logger.error(f"清空系统日志失败: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@bp.route('/instances/<instance_id>/conversations', methods=['GET'])
+def get_instance_conversations(instance_id):
+    """获取实例的对话历史"""
+    try:
+        namespace = request.args.get('namespace')
+        conversations = instance_manager.get_conversation_history(instance_id, namespace)
+        
+        return jsonify({
+            'success': True,
+            'instance_id': instance_id,
+            'namespace': namespace,
+            'conversations': conversations
+        })
+    except Exception as e:
+        logger.error(f"获取实例 {instance_id} 对话历史失败: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@bp.route('/instances/<instance_id>/conversations', methods=['POST'])
+def save_instance_conversation(instance_id):
+    """保存实例对话消息"""
+    try:
+        data = request.get_json() or {}
+        sender = data.get('sender', 'user')
+        message = data.get('message', '')
+        namespace = data.get('namespace')
+        
+        if not message:
+            return jsonify({'success': False, 'error': '消息内容不能为空'}), 400
+        
+        instance_manager.save_conversation_message(instance_id, sender, message, namespace)
+        
+        return jsonify({
+            'success': True,
+            'message': '对话消息已保存'
+        })
+    except Exception as e:
+        logger.error(f"保存实例 {instance_id} 对话消息失败: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@bp.route('/namespaces/<namespace>/conversations', methods=['GET'])
+def get_namespace_conversations(namespace):
+    """获取namespace的所有对话历史"""
+    try:
+        limit = int(request.args.get('limit', 100))
+        conversations = instance_manager.get_namespace_conversation_history(namespace, limit)
+        
+        return jsonify({
+            'success': True,
+            'namespace': namespace,
+            'conversations': conversations,
+            'total': len(conversations)
+        })
+    except Exception as e:
+        logger.error(f"获取namespace {namespace} 对话历史失败: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@bp.route('/replay/<target_type>/<target_name>', methods=['GET'])
+def replay_conversations(target_type, target_name):
+    """回放对话记录"""
+    try:
+        if target_type not in ['instance', 'namespace']:
+            return jsonify({'success': False, 'error': '无效的目标类型，只支持 instance 或 namespace'}), 400
+        
+        limit = request.args.get('limit', 50, type=int)
+        since = request.args.get('since')
+        
+        result = instance_manager.replay_conversations(target_type, target_name, limit, since)
+        
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"回放 {target_type} {target_name} 对话记录失败: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@bp.route('/namespaces', methods=['GET'])
+def get_namespaces():
+    """获取所有namespace"""
+    try:
+        # 首先尝试从文件系统获取
+        namespaces = instance_manager.get_available_namespaces()
+        
+        # 同时从当前实例中统计namespace信息
+        instance_manager.sync_screen_instances()
+        instances = instance_manager.get_instances()
+        
+        # 统计每个namespace的实例数量
+        namespace_counts = {}
+        for instance in instances:
+            ns = instance.get('namespace', 'default')
+            namespace_counts[ns] = namespace_counts.get(ns, 0) + 1
+        
+        # 更新namespace信息
+        for ns in namespaces:
+            ns['instance_count'] = namespace_counts.get(ns['name'], 0)
+        
+        # 添加在实例中发现但文件系统中不存在的namespace
+        for ns_name, count in namespace_counts.items():
+            if not any(ns['name'] == ns_name for ns in namespaces):
+                namespaces.append({
+                    'name': ns_name,
+                    'instance_count': count,
+                    'path': ''
+                })
+        
+        return jsonify({
+            'success': True,
+            'namespaces': namespaces
+        })
+    except Exception as e:
+        logger.error(f"获取namespace列表失败: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@bp.route('/namespaces', methods=['POST'])
+def create_namespace():
+    """创建新的namespace"""
+    try:
+        data = request.get_json() or {}
+        name = data.get('name', '').strip()
+        
+        if not name:
+            return jsonify({'success': False, 'error': 'Namespace名称不能为空'}), 400
+        
+        # 使用cliExtra命令创建namespace
+        result = subprocess.run(
+            ['cliExtra', 'ns', 'create', name],
+            capture_output=True, text=True, timeout=10
+        )
+        
+        if result.returncode == 0:
+            return jsonify({
+                'success': True,
+                'message': f'Namespace "{name}" 创建成功'
+            })
+        else:
+            error_msg = result.stderr or result.stdout
+            return jsonify({'success': False, 'error': error_msg}), 400
+            
+    except Exception as e:
+        logger.error(f"创建namespace失败: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@bp.route('/namespaces/<namespace>', methods=['DELETE'])
+def delete_namespace(namespace):
+    """删除namespace"""
+    try:
+        force = request.args.get('force', 'false').lower() == 'true'
+        
+        cmd = ['cliExtra', 'ns', 'delete', namespace]
+        if force:
+            cmd.append('--force')
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        
+        if result.returncode == 0:
+            return jsonify({
+                'success': True,
+                'message': f'Namespace "{namespace}" 删除成功'
+            })
+        else:
+            error_msg = result.stderr or result.stdout
+            return jsonify({'success': False, 'error': error_msg}), 400
+            
+    except Exception as e:
+        logger.error(f"删除namespace {namespace} 失败: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@bp.route('/instances/<instance_id>/namespace', methods=['PUT'])
+def change_instance_namespace(instance_id):
+    """修改实例的namespace"""
+    try:
+        data = request.get_json() or {}
+        new_namespace = data.get('namespace', '').strip()
+        
+        # 使用cliExtra命令修改namespace
+        result = subprocess.run(
+            ['cliExtra', 'set-ns', instance_id, new_namespace],
+            capture_output=True, text=True, timeout=10
+        )
+        
+        if result.returncode == 0:
+            # 更新本地实例信息
+            instance_manager.sync_screen_instances()
+            
+            return jsonify({
+                'success': True,
+                'message': f'实例 {instance_id} 的namespace已修改为 "{new_namespace or "default"}"'
+            })
+        else:
+            error_msg = result.stderr or result.stdout
+            return jsonify({'success': False, 'error': error_msg}), 400
+            
+    except Exception as e:
+        logger.error(f"修改实例 {instance_id} namespace失败: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @bp.route('/instances/<instance_id>/session-info', methods=['GET'])
 def get_instance_session_info(instance_id):
     """获取实例的tmux会话信息"""
     try:
-        # 使用cliExtra获取实例详细信息
+        # 首先尝试从实例管理器获取信息
+        instance_manager.sync_screen_instances()
+        instances = instance_manager.get_instances()
+        
+        # 查找指定实例
+        target_instance = None
+        for instance in instances:
+            if instance.get('id') == instance_id:
+                target_instance = instance
+                break
+        
+        if target_instance:
+            session_name = target_instance.get('screen_session', '')
+            
+            # 检查 tmux 会话是否真的存在
+            try:
+                result = subprocess.run(['tmux', 'list-sessions'], capture_output=True, text=True)
+                session_exists = result.returncode == 0 and session_name in result.stdout
+            except:
+                session_exists = False
+            
+            if not session_exists:
+                return jsonify({
+                    'success': False,
+                    'error': f'实例 {instance_id} 的 tmux 会话不存在或已停止，请重新启动实例'
+                }), 404
+            
+            return jsonify({
+                'success': True,
+                'instance_id': instance_id,
+                'session': session_name,
+                'status': target_instance.get('status', ''),
+                'namespace': target_instance.get('namespace', 'default'),
+                'project_path': target_instance.get('project_path', ''),
+                'role': target_instance.get('role', ''),
+                'attach_command': f"tmux attach-session -t {session_name}"
+            })
+        
+        # 如果实例管理器中没有找到，尝试使用cliExtra命令
         result = subprocess.run(
             ['cliExtra', 'list', instance_id, '--json'],
             capture_output=True, text=True, timeout=10
@@ -223,16 +580,46 @@ def get_instance_session_info(instance_id):
         if result.returncode == 0:
             import json
             data = json.loads(result.stdout.strip())
-            instance_data = data.get('instance', {})
+            
+            # 适配新的JSON格式
+            if 'instances' in data and data['instances']:
+                instance_data = data['instances'][0]  # 单个实例查询返回数组
+            else:
+                instance_data = data.get('instance', {})
             
             if instance_data:
+                session_name = instance_data.get('session', '')
+                status = instance_data.get('status', '')
+                
+                # 检查实例状态
+                if status.lower() in ['not running', 'stopped', 'detached']:
+                    return jsonify({
+                        'success': False,
+                        'error': f'实例 {instance_id} 当前状态为 "{status}"，无法创建 Web 终端。请先启动实例。'
+                    }), 400
+                
+                # 检查 tmux 会话是否真的存在
+                try:
+                    tmux_result = subprocess.run(['tmux', 'list-sessions'], capture_output=True, text=True)
+                    session_exists = tmux_result.returncode == 0 and session_name in tmux_result.stdout
+                except:
+                    session_exists = False
+                
+                if not session_exists:
+                    return jsonify({
+                        'success': False,
+                        'error': f'实例 {instance_id} 的 tmux 会话 "{session_name}" 不存在。请重新启动实例。'
+                    }), 404
+                
                 return jsonify({
                     'success': True,
                     'instance_id': instance_id,
-                    'session': instance_data.get('session', ''),
-                    'status': instance_data.get('status', ''),
-                    'project_dir': instance_data.get('project_dir', ''),
-                    'attach_command': data.get('commands', {}).get('attach', '')
+                    'session': session_name,
+                    'status': status,
+                    'namespace': instance_data.get('namespace', 'default'),
+                    'project_path': instance_data.get('project_path', ''),
+                    'role': instance_data.get('role', ''),
+                    'attach_command': instance_data.get('attach_command', '')
                 })
             else:
                 return jsonify({
@@ -258,166 +645,6 @@ def get_instance_session_info(instance_id):
         }), 500
 
 # Namespace管理API
-@bp.route('/namespaces', methods=['GET'])
-def get_namespaces():
-    """获取所有namespace列表"""
-    try:
-        result = subprocess.run(
-            ['cliExtra', 'ns', 'show', '--json'],
-            capture_output=True, text=True, timeout=10
-        )
-        
-        if result.returncode == 0:
-            import json
-            data = json.loads(result.stdout.strip())
-            return jsonify({
-                'success': True,
-                'namespaces': data.get('namespaces', [])
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': f'获取namespace列表失败: {result.stderr}'
-            }), 500
-            
-    except subprocess.TimeoutExpired:
-        return jsonify({
-            'success': False,
-            'error': '获取namespace列表超时'
-        }), 500
-    except Exception as e:
-        logger.error(f'获取namespace列表失败: {str(e)}')
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@bp.route('/namespaces', methods=['POST'])
-def create_namespace():
-    """创建新的namespace"""
-    try:
-        data = request.get_json()
-        namespace_name = data.get('name', '').strip()
-        
-        if not namespace_name:
-            return jsonify({
-                'success': False,
-                'error': 'namespace名称不能为空'
-            }), 400
-        
-        result = subprocess.run(
-            ['cliExtra', 'ns', 'create', namespace_name],
-            capture_output=True, text=True, timeout=10
-        )
-        
-        if result.returncode == 0:
-            return jsonify({
-                'success': True,
-                'message': f'namespace {namespace_name} 创建成功'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': f'创建namespace失败: {result.stderr}'
-            }), 500
-            
-    except subprocess.TimeoutExpired:
-        return jsonify({
-            'success': False,
-            'error': '创建namespace超时'
-        }), 500
-    except Exception as e:
-        logger.error(f'创建namespace失败: {str(e)}')
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@bp.route('/namespaces/<namespace_name>', methods=['DELETE'])
-def delete_namespace(namespace_name):
-    """删除namespace"""
-    try:
-        force = request.args.get('force', 'false').lower() == 'true'
-        
-        cmd = ['cliExtra', 'ns', 'delete', namespace_name]
-        if force:
-            cmd.append('--force')
-        
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        
-        if result.returncode == 0:
-            return jsonify({
-                'success': True,
-                'message': f'namespace {namespace_name} 删除成功'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': f'删除namespace失败: {result.stderr}'
-            }), 500
-            
-    except subprocess.TimeoutExpired:
-        return jsonify({
-            'success': False,
-            'error': '删除namespace超时'
-        }), 500
-    except Exception as e:
-        logger.error(f'删除namespace失败: {str(e)}')
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@bp.route('/instances/<instance_id>/namespace', methods=['PUT'])
-def update_instance_namespace(instance_id):
-    """修改实例的namespace"""
-    try:
-        data = request.get_json()
-        new_namespace = data.get('namespace', '').strip()
-        
-        # 如果namespace为空，使用"default"作为默认值
-        if not new_namespace:
-            new_namespace = 'default'
-        
-        result = subprocess.run(
-            ['cliExtra', 'set-ns', instance_id, new_namespace],
-            capture_output=True, text=True, timeout=10
-        )
-        
-        if result.returncode == 0:
-            display_namespace = new_namespace if new_namespace != 'default' else '默认'
-            return jsonify({
-                'success': True,
-                'message': f'实例 {instance_id} 的namespace已更新为 {display_namespace}'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': f'更新实例namespace失败: {result.stderr.strip()}'
-            }), 500
-            
-    except subprocess.TimeoutExpired:
-        return jsonify({
-            'success': False,
-            'error': '更新实例namespace超时'
-        }), 500
-    except Exception as e:
-        logger.error(f'更新实例namespace失败: {str(e)}')
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-        return jsonify({
-            'success': False,
-            'error': '更新实例namespace超时'
-        }), 500
-    except Exception as e:
-        logger.error(f'更新实例namespace失败: {str(e)}')
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
 @bp.route('/attach/<instance_id>', methods=['GET'])
 def get_attach_info(instance_id):
     """获取接管实例的命令信息"""

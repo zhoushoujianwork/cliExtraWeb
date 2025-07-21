@@ -3,6 +3,7 @@
 {% block title %}Q Chat 管理器{% endblock %}
 
 {% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/web_terminal.css') }}">
 <style>
     .create-instance-card {
         background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
@@ -25,6 +26,42 @@
         background-color: #f8f9fa;
         transform: translateX(2px);
     }
+    
+    /* 已停止实例的样式 */
+    .instance-item.instance-stopped {
+        background-color: #f8f9fa;
+        border-color: #dee2e6;
+        opacity: 0.7;
+    }
+    
+    .instance-item.instance-stopped:hover {
+        border-left-color: #6c757d;
+        background-color: #e9ecef;
+        transform: translateX(1px);
+    }
+    
+    .instance-item.instance-stopped .text-muted {
+        color: #6c757d !important;
+    }
+    
+    .instance-item.instance-stopped .btn-outline-secondary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    /* 清理按钮特殊样式 */
+    .btn-outline-danger:hover {
+        background-color: #dc3545;
+        border-color: #dc3545;
+        color: white;
+    }
+    
+    /* 重启按钮特殊样式 */
+    .btn-outline-info:hover {
+        background-color: #17a2b8;
+        border-color: #17a2b8;
+        color: white;
+    }
 </style>
 {% endblock %}
 
@@ -43,6 +80,9 @@
                     </select>
                     <button class="btn btn-sm btn-outline-primary ms-1" onclick="showNamespaceManageModal()" title="管理Namespace">
                         <i class="fas fa-cog"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-warning ms-1" onclick="showNamespaceHistory()" title="查看当前Namespace对话历史">
+                        <i class="fas fa-history"></i>
                     </button>
                 </div>
                 <div class="vr"></div>
@@ -65,31 +105,45 @@
             <div class="card-body">
                 <div id="instancesList">
                     {% for instance in instances %}
-                    <div class="instance-item mb-2 p-2 border rounded" data-namespace="{{ instance.namespace or '' }}">
+                    {% set is_stopped = instance.status in ['Not Running', 'Stopped', 'Terminated'] %}
+                    <div class="instance-item mb-2 p-3 border rounded {{ 'instance-stopped' if is_stopped else '' }}" 
+                         data-namespace="{{ instance.namespace or '' }}"
+                         data-status="{{ instance.status }}"
+                         data-instance-id="{{ instance.id }}">
                         <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <strong>{{ instance.id }}</strong>
-                                <span class="badge bg-{{ 'success' if instance.status == 'running' else 'secondary' }} ms-1">
+                            <div class="d-flex align-items-center gap-2">
+                                <strong class="{{ 'text-muted' if is_stopped else '' }}">{{ instance.id }}</strong>
+                                <span class="badge bg-{{ 'success' if instance.status == 'Attached' else 'warning' if instance.status == 'Detached' else 'danger' }}">
                                     {{ instance.status }}
                                 </span>
-                                {% if instance.namespace %}
-                                <span class="badge bg-primary ms-1" title="Namespace">
-                                    <i class="fas fa-layer-group"></i> {{ instance.namespace }}
-                                </span>
-                                {% endif %}
-                                {% if instance.role %}
-                                <span class="badge bg-info ms-1" title="角色">
-                                    <i class="fas fa-user-tie"></i> {{ instance.role }}
-                                </span>
-                                {% endif %}
                             </div>
                             <div class="btn-group btn-group-sm">
-                                <button class="btn btn-info" onclick="createWebTerminal('{{ instance.id }}')" title="Web终端">
-                                    <i class="fas fa-desktop"></i>
-                                </button>
-                                <button class="btn btn-danger" onclick="stopInstance('{{ instance.id }}')" title="停止">
-                                    <i class="fas fa-stop"></i>
-                                </button>
+                                {% if is_stopped %}
+                                    <!-- 已停止实例的操作按钮 -->
+                                    <button class="btn btn-outline-info" onclick="showInstanceDetails('{{ instance.id }}')" title="查看详情">
+                                        <i class="fas fa-info-circle"></i>
+                                    </button>
+                                    <button class="btn btn-outline-success" onclick="resumeInstance('{{ instance.id }}')" title="恢复实例">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" onclick="cleanInstance('{{ instance.id }}')" title="清理实例">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                {% else %}
+                                    <!-- 运行中实例的操作按钮 -->
+                                    <button class="btn btn-info" onclick="createWebTerminal('{{ instance.id }}')" title="Web终端">
+                                        <i class="fas fa-desktop"></i>
+                                    </button>
+                                    <button class="btn btn-warning" onclick="conversationHistory.showInstanceHistory('{{ instance.id }}', '{{ instance.namespace or 'default' }}')" title="对话历史">
+                                        <i class="fas fa-history"></i>
+                                    </button>
+                                    <button class="btn btn-outline-info" onclick="showInstanceDetails('{{ instance.id }}')" title="查看详情">
+                                        <i class="fas fa-info-circle"></i>
+                                    </button>
+                                    <button class="btn btn-danger" onclick="stopInstance('{{ instance.id }}')" title="停止实例">
+                                        <i class="fas fa-stop"></i>
+                                    </button>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -111,34 +165,76 @@
             <div class="card-body d-flex flex-column p-0">
                 <!-- 创建实例交互卡片 -->
                 <div id="createInstanceCard" class="create-instance-card p-3 border-bottom bg-light" style="display: none;">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
                         <h6 class="mb-0"><i class="fas fa-rocket"></i> 创建新实例</h6>
                         <button class="btn btn-sm btn-outline-secondary" onclick="hideCreateInstanceCard()">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
                     
-                    <div class="row g-2">
-                        <div class="col-md-6">
-                            <input type="text" id="cardInstanceName" class="form-control form-control-sm" placeholder="实例名称（可选）">
+                    <form id="createInstanceForm">
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-6">
+                                <label class="form-label form-label-sm">实例名称</label>
+                                <input type="text" id="cardInstanceName" class="form-control form-control-sm" placeholder="实例名称（可选）">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label form-label-sm">角色</label>
+                                <select id="cardInstanceRole" class="form-select form-select-sm">
+                                    <option value="">选择角色</option>
+                                    <option value="frontend">前端工程师</option>
+                                    <option value="backend">后端工程师</option>
+                                    <option value="test">测试工程师</option>
+                                    <option value="devops">运维工程师</option>
+                                    <option value="reviewer">代码审查工程师</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <select id="cardInstanceRole" class="form-select form-select-sm">
-                                <option value="">选择角色</option>
-                                <option value="frontend">前端工程师</option>
-                                <option value="backend">后端工程师</option>
-                                <option value="test">测试工程师</option>
-                                <option value="devops">运维工程师</option>
-                            </select>
+                        
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-6">
+                                <label class="form-label form-label-sm">命名空间</label>
+                                <select id="cardInstanceNamespace" class="form-select form-select-sm">
+                                    <option value="">默认命名空间</option>
+                                    <option value="frontend">frontend</option>
+                                    <option value="backend">backend</option>
+                                    <option value="test">test</option>
+                                    <option value="devops">devops</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label form-label-sm">工具</label>
+                                <select id="cardInstanceTools" class="form-select form-select-sm" multiple size="1">
+                                    <option value="git">Git</option>
+                                    <option value="docker">Docker</option>
+                                    <option value="npm">NPM</option>
+                                    <option value="python">Python</option>
+                                    <option value="node">Node.js</option>
+                                </select>
+                                <small class="text-muted">按住Ctrl选择多个</small>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="mt-2 d-flex gap-2">
-                        <button class="btn btn-success btn-sm" onclick="createInstanceFromCard()">
-                            <i class="fas fa-rocket"></i> 启动
-                        </button>
-                        <button class="btn btn-outline-secondary btn-sm" onclick="hideCreateInstanceCard()">取消</button>
-                    </div>
+                        
+                        <div class="mb-2">
+                            <label class="form-label form-label-sm">工程目录</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" id="cardInstancePath" class="form-control" placeholder="项目路径（可选，默认当前目录）">
+                                <button class="btn btn-outline-secondary" type="button" onclick="selectCurrentDirectory()">
+                                    <i class="fas fa-folder"></i> 当前目录
+                                </button>
+                            </div>
+                            <small class="text-muted">留空使用当前目录: /Users/mikas/github/cliExtraWeb</small>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-success btn-sm" onclick="createInstanceFromCard()">
+                                <i class="fas fa-rocket"></i> 启动实例
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="hideCreateInstanceCard()">
+                                <i class="fas fa-times"></i> 取消
+                            </button>
+                        </div>
+                    </form>
                 </div>
                 
                 <!-- 聊天历史 -->
@@ -184,7 +280,24 @@
 {% endblock %}
 
 {% block scripts %}
+<!-- XTerm.js 依赖 -->
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+
+<!-- 应用脚本 -->
 <script src="{{ url_for('static', filename='js/namespace_manager_optimized.js') }}"></script>
 <script src="{{ url_for('static', filename='js/create_instance_card.js') }}"></script>
+<script src="{{ url_for('static', filename='js/instance_operations.js') }}"></script>
+<script src="{{ url_for('static', filename='js/conversation_history.js') }}"></script>
+<script src="{{ url_for('static', filename='js/xterm_terminal.js') }}"></script>
 <script src="{{ url_for('static', filename='js/chat_manager.js') }}"></script>
+
+<script>
+// 显示当前namespace的对话历史
+function showNamespaceHistory() {
+    const currentNs = getCurrentNamespace() || 'default';
+    conversationHistory.showNamespaceHistory(currentNs);
+}
+</script>
 {% endblock %}

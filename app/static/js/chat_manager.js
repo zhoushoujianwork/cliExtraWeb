@@ -695,22 +695,55 @@ function refreshInstances() {
 
 function updateInstancesList(instances) {
     const container = document.getElementById('instancesList');
-    container.innerHTML = instances.map(instance => `
-        <div class="instance-item mb-2 p-2 border rounded">
-            <div class="d-flex justify-content-between align-items-center">
-                <span><strong>tmux实例 ${instance.id}</strong></span>
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-info" onclick="createWebTerminal('${instance.id}')" title="Web终端接管">
-                        <i class="fas fa-desktop"></i>
-                    </button>
-                    <button class="btn btn-danger" onclick="stopInstance('${instance.id}')" title="停止实例">
-                        <i class="fas fa-stop"></i>
-                    </button>
+    if (!container) return;
+    
+    container.innerHTML = instances.map(instance => {
+        const isRunning = instance.status !== 'Not Running' && instance.status !== 'Stopped' && instance.status !== 'Terminated';
+        const statusClass = instance.status === 'Attached' ? 'success' : 
+                           instance.status === 'Detached' ? 'warning' : 'danger';
+        
+        return `
+            <div class="instance-item mb-2 p-3 border rounded ${isRunning ? '' : 'instance-stopped'}" 
+                 data-namespace="${instance.namespace || ''}"
+                 data-status="${instance.status}"
+                 data-instance-id="${instance.id}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2">
+                        <strong class="${isRunning ? '' : 'text-muted'}">${instance.id}</strong>
+                        <span class="badge bg-${statusClass}">
+                            ${instance.status}
+                        </span>
+                    </div>
+                    <div class="btn-group btn-group-sm">
+                        ${isRunning ? `
+                            <button class="btn btn-info" onclick="createWebTerminal('${instance.id}')" title="Web终端">
+                                <i class="fas fa-desktop"></i>
+                            </button>
+                            <button class="btn btn-warning" onclick="conversationHistory.showInstanceHistory('${instance.id}', '${instance.namespace || 'default'}')" title="对话历史">
+                                <i class="fas fa-history"></i>
+                            </button>
+                            <button class="btn btn-outline-info" onclick="showInstanceDetails('${instance.id}')" title="查看详情">
+                                <i class="fas fa-info-circle"></i>
+                            </button>
+                            <button class="btn btn-danger" onclick="stopInstance('${instance.id}')" title="停止实例">
+                                <i class="fas fa-stop"></i>
+                            </button>
+                        ` : `
+                            <button class="btn btn-outline-info" onclick="showInstanceDetails('${instance.id}')" title="查看详情">
+                                <i class="fas fa-info-circle"></i>
+                            </button>
+                            <button class="btn btn-outline-success" onclick="resumeInstance('${instance.id}')" title="恢复实例">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <button class="btn btn-outline-danger" onclick="cleanInstance('${instance.id}')" title="清理实例">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        `}
+                    </div>
                 </div>
             </div>
-            <small class="text-muted">${instance.details}</small>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function clearSystemLogs() {

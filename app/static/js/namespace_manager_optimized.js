@@ -255,6 +255,242 @@ async function createNamespace() {
 }
 
 /**
+ * 更新namespace列表显示（模态框中）
+ */
+function updateNamespacesList() {
+    const container = document.getElementById('namespacesList');
+    if (!container) return;
+    
+    if (namespaces.length === 0) {
+        container.innerHTML = '<p class="text-muted">暂无namespace</p>';
+        return;
+    }
+    
+    let html = '';
+    namespaces.forEach(ns => {
+        html += `
+            <div class="namespace-item mb-2 p-3 border rounded">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${ns.name}</strong>
+                        <span class="badge bg-secondary ms-2">${ns.instance_count} 实例</span>
+                        ${ns.name === currentNamespace ? '<span class="badge bg-success ms-1">当前</span>' : ''}
+                    </div>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary" onclick="switchToNamespace('${ns.name}')" title="切换到此namespace">
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="deleteNamespace('${ns.name}')" title="删除namespace">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+/**
+ * 更新namespace选择框
+ */
+function updateNamespaceSelects() {
+    const selects = [
+        document.getElementById('cardInstanceNamespace'),
+        document.getElementById('newNamespaceSelect')
+    ];
+    
+    selects.forEach(select => {
+        if (!select) return;
+        
+        // 保存当前选中值
+        const currentValue = select.value;
+        
+        // 保留默认选项
+        const defaultOption = select.querySelector('option[value=""]');
+        select.innerHTML = '';
+        if (defaultOption) {
+            select.appendChild(defaultOption);
+        }
+        
+        // 添加namespace选项
+        namespaces.forEach(ns => {
+            const option = document.createElement('option');
+            option.value = ns.name;
+            option.textContent = ns.name;
+            select.appendChild(option);
+        });
+        
+        // 恢复选中值
+        if (currentValue) {
+            select.value = currentValue;
+        }
+    });
+}
+
+/**
+ * 显示namespace管理模态框
+ */
+function showNamespaceManageModal() {
+    loadNamespaces(); // 刷新数据
+    const modal = new bootstrap.Modal(document.getElementById('namespaceManageModal'));
+    modal.show();
+}
+
+/**
+ * 切换到指定namespace
+ */
+function switchToNamespace(namespaceName) {
+    const select = document.getElementById('currentNamespaceSelect');
+    if (select) {
+        select.value = namespaceName;
+        switchNamespace();
+    }
+    
+    // 关闭模态框
+    const modal = bootstrap.Modal.getInstance(document.getElementById('namespaceManageModal'));
+    if (modal) {
+        modal.hide();
+    }
+}
+
+/**
+ * 删除namespace
+ */
+async function deleteNamespace(namespaceName) {
+    const confirmed = confirm(`确定要删除namespace "${namespaceName}" 吗？`);
+    if (!confirmed) return;
+    
+    try {
+        const response = await fetch(`/api/namespaces/${namespaceName}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            addSystemMessage(`Namespace "${namespaceName}" 删除成功`);
+            
+            // 如果删除的是当前选中的namespace，切换到"全部"
+            if (namespaceName === currentNamespace) {
+                const select = document.getElementById('currentNamespaceSelect');
+                if (select) {
+                    select.value = '';
+                    switchNamespace();
+                }
+            }
+            
+            await loadNamespaces();
+            await loadInstancesWithNamespace();
+        } else {
+            // 如果有实例，询问是否强制删除
+            if (data.error.includes('实例')) {
+                const forceDelete = confirm(`${data.error}\n\n是否强制删除？`);
+                if (forceDelete) {
+                    await deleteNamespaceForce(namespaceName);
+                }
+            } else {
+                alert('删除namespace失败: ' + data.error);
+            }
+        }
+    } catch (error) {
+        console.error('删除namespace异常:', error);
+        alert('删除namespace异常: ' + error.message);
+    }
+}
+
+/**
+ * 强制删除namespace
+ */
+async function deleteNamespaceForce(namespaceName) {
+    try {
+        const response = await fetch(`/api/namespaces/${namespaceName}?force=true`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            addSystemMessage(`Namespace "${namespaceName}" 强制删除成功`);
+            
+            // 如果删除的是当前选中的namespace，切换到"全部"
+            if (namespaceName === currentNamespace) {
+                const select = document.getElementById('currentNamespaceSelect');
+                if (select) {
+                    select.value = '';
+                    switchNamespace();
+                }
+            }
+            
+            await loadNamespaces();
+            await loadInstancesWithNamespace();
+        } else {
+            alert('强制删除namespace失败: ' + data.error);
+        }
+    } catch (error) {
+        console.error('强制删除namespace异常:', error);
+        alert('强制删除namespace异常: ' + error.message);
+    }
+}
+
+/**
+ * 显示修改namespace模态框
+ */
+function showChangeNamespaceModal(instanceId) {
+    document.getElementById('instanceIdForNamespace').value = instanceId;
+    
+    // 更新模态框中的namespace选择
+    updateNamespaceSelects();
+    
+    const modal = new bootstrap.Modal(document.getElementById('changeNamespaceModal'));
+    modal.show();
+}
+
+/**
+ * 修改实例的namespace
+ */
+async function changeInstanceNamespace() {
+    const instanceId = document.getElementById('instanceIdForNamespace').value;
+    const newNamespace = document.getElementById('newNamespaceSelect').value;
+    
+    if (!instanceId) {
+        alert('实例ID不能为空');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/instances/${instanceId}/namespace`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ namespace: newNamespace })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            addSystemMessage(data.message);
+            
+            // 关闭模态框
+            const modal = bootstrap.Modal.getInstance(document.getElementById('changeNamespaceModal'));
+            modal.hide();
+            
+            // 刷新实例列表
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            alert('修改namespace失败: ' + data.error);
+        }
+    } catch (error) {
+        console.error('修改namespace异常:', error);
+        alert('修改namespace异常: ' + error.message);
+    }
+}
+
+/**
  * 获取当前选中的namespace
  */
 function getCurrentNamespace() {
@@ -266,4 +502,11 @@ window.loadNamespaces = loadNamespaces;
 window.loadInstancesWithNamespace = loadInstancesWithNamespace;
 window.switchNamespace = switchNamespace;
 window.createNamespace = createNamespace;
+window.updateNamespacesList = updateNamespacesList;
+window.updateNamespaceSelects = updateNamespaceSelects;
+window.showNamespaceManageModal = showNamespaceManageModal;
+window.switchToNamespace = switchToNamespace;
+window.deleteNamespace = deleteNamespace;
+window.showChangeNamespaceModal = showChangeNamespaceModal;
+window.changeInstanceNamespace = changeInstanceNamespace;
 window.getCurrentNamespace = getCurrentNamespace;
