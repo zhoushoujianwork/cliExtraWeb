@@ -16,9 +16,9 @@ bp = Blueprint('workflow_api', __name__, url_prefix='/api/workflow')
 def get_workflow(namespace):
     """获取指定 namespace 的 workflow 配置"""
     try:
-        # 调用 cliExtra workflow show 命令
+        # 调用 qq workflow show 命令
         result = subprocess.run(
-            ['cliExtra', 'workflow', 'show', namespace],
+            ['qq', 'workflow', 'show', namespace],
             capture_output=True,
             text=True,
             timeout=10
@@ -87,7 +87,7 @@ def list_workflows():
             try:
                 # 尝试获取每个 namespace 的 workflow
                 result = subprocess.run(
-                    ['cliExtra', 'workflow', 'show', namespace],
+                    ['qq', 'workflow', 'show', namespace],
                     capture_output=True,
                     text=True,
                     timeout=5
@@ -129,7 +129,7 @@ def get_workflow_help():
     """获取 workflow 帮助信息"""
     try:
         result = subprocess.run(
-            ['cliExtra', 'workflow', 'help'],
+            ['qq', 'workflow', 'help'],
             capture_output=True,
             text=True,
             timeout=10
