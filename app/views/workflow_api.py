@@ -7,9 +7,9 @@ from flask import Blueprint, jsonify, request
 import subprocess
 import json
 import yaml
-from app.utils.logger import get_logger
+import logging
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 bp = Blueprint('workflow_api', __name__, url_prefix='/api/workflow')
 
 @bp.route('/<namespace>', methods=['GET'])
@@ -76,41 +76,54 @@ def get_workflow(namespace):
 def list_workflows():
     """获取所有可用的 workflow"""
     try:
-        # 获取所有 namespace
-        from app.services.instance_manager import InstanceManager
-        manager = InstanceManager()
-        namespaces = manager.get_available_namespaces()
+        # 使用新的 workflow list 命令
+        result = subprocess.run(
+            ['qq', 'workflow', 'list'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
         
+        if result.returncode != 0:
+            logger.error(f"获取 workflow 列表失败: {result.stderr}")
+            return jsonify({
+                'success': False,
+                'error': f'获取列表失败: {result.stderr.strip()}'
+            }), 500
+        
+        # 解析输出
         workflows = []
-        for ns_info in namespaces:
-            namespace = ns_info['name']
-            try:
-                # 尝试获取每个 namespace 的 workflow
-                result = subprocess.run(
-                    ['qq', 'workflow', 'show', namespace],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                
-                if result.returncode == 0:
+        lines = result.stdout.strip().split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('✅') or line.startswith('❌'):
+                # 解析格式：✅ q_cli - workflow.yaml exists
+                parts = line.split(' - ')
+                if len(parts) >= 2:
+                    status_and_name = parts[0].strip()
+                    description = parts[1].strip()
+                    
+                    # 提取 namespace 名称
+                    namespace = status_and_name[2:].strip()  # 去掉 ✅ 或 ❌
+                    has_workflow = line.startswith('✅')
+                    
+                    # 获取实例数量（如果需要的话）
+                    instance_count = 0
+                    try:
+                        from app.services.instance_manager import InstanceManager
+                        manager = InstanceManager()
+                        instances = manager.get_instances_by_namespace(namespace)
+                        instance_count = len(instances)
+                    except:
+                        pass
+                    
                     workflows.append({
                         'namespace': namespace,
-                        'has_workflow': True,
-                        'instance_count': ns_info.get('count', 0)
+                        'has_workflow': has_workflow,
+                        'description': description,
+                        'instance_count': instance_count
                     })
-                else:
-                    workflows.append({
-                        'namespace': namespace,
-                        'has_workflow': False,
-                        'instance_count': ns_info.get('count', 0)
-                    })
-            except:
-                workflows.append({
-                    'namespace': namespace,
-                    'has_workflow': False,
-                    'instance_count': ns_info.get('count', 0)
-                })
         
         return jsonify({
             'success': True,
@@ -121,7 +134,37 @@ def list_workflows():
         logger.error(f"获取 workflow 列表异常: {str(e)}")
         return jsonify({
             'success': False,
-            'error': f'获取 workflow 列表异常: {str(e)}'
+            'error': f'获取列表异常: {str(e)}'
+        }), 500
+
+@bp.route('/info', methods=['GET'])
+def get_workflow_info():
+    """获取 workflow 系统信息"""
+    try:
+        result = subprocess.run(
+            ['qq', 'workflow', 'info'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode != 0:
+            logger.error(f"获取 workflow 信息失败: {result.stderr}")
+            return jsonify({
+                'success': False,
+                'error': f'获取信息失败: {result.stderr.strip()}'
+            }), 500
+        
+        return jsonify({
+            'success': True,
+            'info': result.stdout
+        })
+        
+    except Exception as e:
+        logger.error(f"获取 workflow 信息异常: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'获取信息异常: {str(e)}'
         }), 500
 
 @bp.route('/help', methods=['GET'])

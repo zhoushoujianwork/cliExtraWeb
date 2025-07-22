@@ -1192,3 +1192,117 @@ def browse_directory():
     except Exception as e:
         logger.error(f'浏览目录失败: {str(e)}')
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@bp.route('/upload-temp-image', methods=['POST'])
+def upload_temp_image():
+    """上传临时图片文件"""
+    try:
+        if 'image' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': '没有找到图片文件'
+            }), 400
+        
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': '没有选择文件'
+            }), 400
+        
+        # 检查文件类型
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'}
+        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_ext not in allowed_extensions:
+            return jsonify({
+                'success': False,
+                'error': f'不支持的文件类型: {file_ext}'
+            }), 400
+        
+        # 获取自定义文件名或生成默认文件名
+        custom_filename = request.form.get('filename')
+        if custom_filename:
+            filename = custom_filename
+        else:
+            import time
+            timestamp = int(time.time())
+            filename = f'temp_image_{timestamp}.{file_ext}'
+        
+        # 创建临时目录
+        import tempfile
+        import os
+        temp_dir = tempfile.gettempdir()
+        cliextra_temp_dir = os.path.join(temp_dir, 'cliExtraWeb_images')
+        
+        if not os.path.exists(cliextra_temp_dir):
+            os.makedirs(cliextra_temp_dir)
+        
+        # 保存文件
+        file_path = os.path.join(cliextra_temp_dir, filename)
+        file.save(file_path)
+        
+        logger.info(f"临时图片已保存: {file_path}")
+        
+        return jsonify({
+            'success': True,
+            'path': file_path,
+            'filename': filename,
+            'size': os.path.getsize(file_path)
+        })
+        
+    except Exception as e:
+        logger.error(f"上传临时图片失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'上传失败: {str(e)}'
+        }), 500
+
+@bp.route('/clean-temp-images', methods=['POST'])
+def clean_temp_images():
+    """清理临时图片文件"""
+    try:
+        import tempfile
+        import os
+        import glob
+        
+        temp_dir = tempfile.gettempdir()
+        cliextra_temp_dir = os.path.join(temp_dir, 'cliExtraWeb_images')
+        
+        if not os.path.exists(cliextra_temp_dir):
+            return jsonify({
+                'success': True,
+                'message': '临时目录不存在',
+                'cleaned_count': 0
+            })
+        
+        # 获取所有临时图片文件
+        pattern = os.path.join(cliextra_temp_dir, 'temp_image_*')
+        temp_files = glob.glob(pattern)
+        
+        cleaned_count = 0
+        for file_path in temp_files:
+            try:
+                # 检查文件年龄，只删除超过1小时的文件
+                import time
+                file_age = time.time() - os.path.getmtime(file_path)
+                if file_age > 3600:  # 1小时 = 3600秒
+                    os.remove(file_path)
+                    cleaned_count += 1
+            except Exception as e:
+                logger.warning(f"删除临时文件失败 {file_path}: {str(e)}")
+        
+        logger.info(f"清理了 {cleaned_count} 个临时图片文件")
+        
+        return jsonify({
+            'success': True,
+            'message': f'清理了 {cleaned_count} 个临时文件',
+            'cleaned_count': cleaned_count
+        })
+        
+    except Exception as e:
+        logger.error(f"清理临时图片失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'清理失败: {str(e)}'
+        }), 500

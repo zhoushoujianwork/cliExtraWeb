@@ -1,0 +1,94 @@
+/**
+ * 图片粘贴和拖拽功能的样式
+ */
+
+/* 拖拽悬停效果 */
+.drag-over {
+    border: 2px dashed #007bff !important;
+    background-color: rgba(0, 123, 255, 0.1) !important;
+    transition: all 0.3s ease;
+}
+
+/* 聊天输入框增强样式 */
+#chatInput {
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+#chatInput:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* 图片上传状态提示 */
+.image-upload-status {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1050;
+    max-width: 300px;
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* 图片预览样式 */
+.image-preview {
+    max-width: 200px;
+    max-height: 150px;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+    margin: 5px 0;
+}
+
+/* 图片消息标识 */
+.image-message {
+    background-color: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    padding: 8px 12px;
+    margin: 4px 0;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.image-message::before {
+    content: "🖼️ ";
+    margin-right: 5px;
+}
+
+/* 输入框提示文本 */
+.input-help-text {
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.input-help-text i {
+    color: #007bff;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .image-upload-status {
+        left: 10px;
+        right: 10px;
+        max-width: none;
+    }
+    
+    .image-preview {
+        max-width: 150px;
+        max-height: 100px;
+    }
+}
