@@ -47,7 +47,8 @@ class QInstance:
             'start_time': self.start_time,
             'role': self.role,
             'screen_session': self.screen_session,
-            'pid': self.pid
+            'pid': self.pid,
+            'namespace': self.namespace  # 添加缺失的 namespace 字段
         }
     
     def is_running(self) -> bool:
