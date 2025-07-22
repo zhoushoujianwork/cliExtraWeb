@@ -7,8 +7,41 @@ let namespaces = [];
 let currentNamespace = ''; // 当前选中的namespace
 let allInstances = []; // 所有实例数据
 
+// 缓存键名
+const NAMESPACE_CACHE_KEY = 'cliExtraWeb_selectedNamespace';
+
+/**
+ * 从缓存中获取上次选择的 namespace
+ */
+function getStoredNamespace() {
+    try {
+        return localStorage.getItem(NAMESPACE_CACHE_KEY) || '';
+    } catch (error) {
+        console.warn('无法读取 namespace 缓存:', error);
+        return '';
+    }
+}
+
+/**
+ * 将当前选择的 namespace 保存到缓存
+ */
+function storeNamespace(namespace) {
+    try {
+        localStorage.setItem(NAMESPACE_CACHE_KEY, namespace || '');
+    } catch (error) {
+        console.warn('无法保存 namespace 缓存:', error);
+    }
+}
+
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', function() {
+    // 从缓存中恢复上次选择的 namespace
+    const storedNamespace = getStoredNamespace();
+    if (storedNamespace) {
+        currentNamespace = storedNamespace;
+        console.log('从缓存中恢复 namespace:', currentNamespace);
+    }
+    
     // 先加载namespace列表，再加载实例数据
     loadNamespaces().then(() => {
         loadInstancesWithNamespace();
@@ -112,14 +145,28 @@ async function loadNamespaces() {
             updateNamespacesList();
             updateNamespaceSelects();
             
-            // 如果当前没有选择namespace，自动选择第一个
-            if (!currentNamespace && namespaces.length > 0) {
-                currentNamespace = namespaces[0].name;
-                const select = document.getElementById('currentNamespaceSelect');
+            // 尝试恢复缓存的 namespace 选择
+            const storedNamespace = getStoredNamespace();
+            const select = document.getElementById('currentNamespaceSelect');
+            
+            if (storedNamespace && namespaces.some(ns => ns.name === storedNamespace)) {
+                // 缓存的 namespace 仍然存在，恢复选择
+                currentNamespace = storedNamespace;
                 if (select) {
                     select.value = currentNamespace;
                 }
-                // 触发切换逻辑
+                console.log('恢复缓存的 namespace 选择:', currentNamespace);
+            } else if (!currentNamespace && namespaces.length > 0) {
+                // 没有缓存或缓存的 namespace 不存在，选择第一个
+                currentNamespace = namespaces[0].name;
+                if (select) {
+                    select.value = currentNamespace;
+                }
+                console.log('选择默认 namespace:', currentNamespace);
+            }
+            
+            // 触发切换逻辑
+            if (currentNamespace) {
                 switchNamespace();
             }
             
@@ -150,6 +197,9 @@ function switchNamespace() {
         currentNamespace = namespaces[0].name;
         select.value = currentNamespace;
     }
+    
+    // 保存当前选择到缓存
+    storeNamespace(currentNamespace);
     
     // 更新标签显示
     if (label) {
