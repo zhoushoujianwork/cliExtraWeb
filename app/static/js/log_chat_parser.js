@@ -713,6 +713,60 @@ function showLogChatModal(instanceId) {
                         </h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
+                    <div class="modal-body">
+                        <div id="logChatContainer" class="chat-container" style="height: 400px; overflow-y: auto;">
+                            <div class="text-center p-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">加载中...</span>
+                                </div>
+                                <p class="mt-2">正在加载聊天记录...</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        <button type="button" class="btn btn-primary" onclick="loadLogChatFromInstance('${instanceId}')">刷新</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 移除已存在的模态框
+    const existingModal = document.getElementById('logChatModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // 添加新模态框
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('logChatModal'));
+    modal.show();
+    
+    // 加载聊天记录
+    loadLogChatFromInstance(instanceId);
+    
+    // 模态框关闭后清理
+    document.getElementById('logChatModal').addEventListener('hidden.bs.modal', function() {
+        this.remove();
+    });
+}
+
+// 立即导出到全局作用域
+window.showLogChatModal = showLogChatModal;
+    const modalHtml = `
+        <div class="modal fade" id="logChatModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-comments me-2"></i>
+                            实例聊天记录 - ${instanceId}
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
                     <div class="modal-body p-0">
                         <div id="logChatContainer" class="chat-container">
                             <div class="text-center p-4">
@@ -790,6 +844,43 @@ async function loadLogChatFromInstance(instanceId) {
     }
 }
 
+// 立即导出到全局作用域
+window.loadLogChatFromInstance = loadLogChatFromInstance;
+    const container = document.getElementById('logChatContainer');
+    if (!container) return;
+    
+    try {
+        const response = await fetch(`/api/instance/${instanceId}/log`);
+        const data = await response.json();
+        
+        if (data.success && data.log_content) {
+            const conversations = window.logChatParser.parseLogContent(data.log_content);
+            
+            if (conversations.length > 0) {
+                container.innerHTML = '<div id="logChatMessages" class="chat-messages"></div>';
+                window.logChatParser.renderChatMessages(conversations, 'logChatMessages');
+            } else {
+                container.innerHTML = `
+                    <div class="text-center p-4 text-muted">
+                        <i class="fas fa-comment-slash fa-2x mb-3"></i>
+                        <p>暂无聊天记录</p>
+                    </div>
+                `;
+            }
+        } else {
+            throw new Error(data.error || '无法读取日志文件');
+        }
+    } catch (error) {
+        console.error('加载聊天记录失败:', error);
+        container.innerHTML = `
+            <div class="text-center p-4 text-danger">
+                <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+                <p>加载失败: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
 // 复制消息内容
 function copyMessageContent(messageId) {
     const messageElement = document.querySelector(`[data-message-id="${messageId}"] .message-body`);
@@ -804,6 +895,9 @@ function copyMessageContent(messageId) {
     }
 }
 
+// 立即导出到全局作用域
+window.copyMessageContent = copyMessageContent;
+
 // 导出函数到全局作用域
 window.showLogChatModal = showLogChatModal;
 window.loadLogChatFromInstance = loadLogChatFromInstance;
@@ -812,4 +906,15 @@ window.copyMessageContent = copyMessageContent;
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
     console.log('📄 日志聊天解析器已加载');
+    console.log('🔍 检查函数导出状态:');
+    console.log('  - showLogChatModal:', typeof window.showLogChatModal);
+    console.log('  - loadLogChatFromInstance:', typeof window.loadLogChatFromInstance);
+    console.log('  - copyMessageContent:', typeof window.copyMessageContent);
 });
+
+// 立即检查并报告函数状态
+console.log('🚀 log_chat_parser.js 脚本开始执行');
+console.log('📋 函数定义状态:');
+console.log('  - showLogChatModal 已定义:', typeof showLogChatModal !== 'undefined');
+console.log('  - loadLogChatFromInstance 已定义:', typeof loadLogChatFromInstance !== 'undefined');
+console.log('  - copyMessageContent 已定义:', typeof copyMessageContent !== 'undefined');
