@@ -22,7 +22,10 @@ class TmuxChatParser {
         
         this.log('🔍 开始解析日志内容，长度:', logContent.length);
         
-        const lines = logContent.split('\n');
+        // 预处理：过滤多余的 Thinking 行
+        const preprocessedContent = this.preprocessLogContent(logContent);
+        
+        const lines = preprocessedContent.split('\n');
         const conversations = [];
         let currentMessage = {
             type: null,
@@ -78,6 +81,58 @@ class TmuxChatParser {
         this.log('✅ 解析完成，共', filtered.length, '条有效对话');
         
         return filtered;
+    }
+    
+    /**
+     * 预处理日志内容，过滤多余的 Thinking 行
+     * @param {string} logContent - 原始日志内容
+     * @returns {string} 预处理后的内容
+     */
+    preprocessLogContent(logContent) {
+        const lines = logContent.split('\n');
+        const processedLines = [];
+        let hasSeenThinking = false;
+        
+        for (const line of lines) {
+            const cleanLine = this.cleanAnsiCodes(line).trim();
+            
+            // 检查是否是 Thinking 行
+            if (this.isThinkingLine(cleanLine)) {
+                if (!hasSeenThinking) {
+                    // 保留第一个 Thinking 行
+                    processedLines.push(line);
+                    hasSeenThinking = true;
+                    this.log('📝 保留第一个 Thinking 行');
+                } else {
+                    // 过滤掉后续的 Thinking 行
+                    this.log('🗑️ 过滤多余的 Thinking 行:', cleanLine.substring(0, 50));
+                    continue;
+                }
+            } else {
+                processedLines.push(line);
+            }
+        }
+        
+        this.log('🔧 预处理完成，从', lines.length, '行减少到', processedLines.length, '行');
+        return processedLines.join('\n');
+    }
+    
+    /**
+     * 判断是否是 Thinking 行
+     * @param {string} line - 清理后的行内容
+     * @returns {boolean}
+     */
+    isThinkingLine(line) {
+        const thinkingPatterns = [
+            /^Thinking\.{3,}$/i,                // Thinking...
+            /^Thinking\.{1,}$/i,                // Thinking.
+            /^正在思考\.{3,}$/,                 // 正在思考...
+            /^思考中\.{3,}$/,                   // 思考中...
+            /^Processing\.{3,}$/i,              // Processing...
+            /^Analyzing\.{3,}$/i,               // Analyzing...
+        ];
+        
+        return thinkingPatterns.some(pattern => pattern.test(line));
     }
     
     /**
@@ -222,28 +277,65 @@ class TmuxChatParser {
      * @returns {Array} 过滤后的对话数组
      */
     filterConversations(conversations) {
-        return conversations.filter(conv => {
+        const filtered = [];
+        let hasSeenThinking = false;
+        
+        for (const conv of conversations) {
             // 过滤掉太短的消息
-            if (conv.content.length < 2) return false;
+            if (conv.content.length < 2) continue;
             
-            // 过滤掉纯系统噪音
-            const systemNoise = [
-                'Thinking...',
-                'Loading...',
-                'Please wait...',
-                '请稍等...',
-                'hi',
-                '...',
-                'OK',
-                'ok'
-            ];
-            
-            if (systemNoise.some(noise => conv.content.trim() === noise)) {
-                return false;
+            // 检查是否是 Thinking 消息
+            if (this.isThinkingMessage(conv.content)) {
+                if (!hasSeenThinking) {
+                    // 保留第一个 Thinking 消息
+                    filtered.push(conv);
+                    hasSeenThinking = true;
+                    this.log('📝 保留第一个 Thinking 消息');
+                } else {
+                    // 过滤掉后续的 Thinking 消息
+                    this.log('🗑️ 过滤多余的 Thinking 消息:', conv.content.substring(0, 30));
+                    continue;
+                }
+            } else {
+                // 过滤掉纯系统噪音
+                const systemNoise = [
+                    'Loading...',
+                    'Please wait...',
+                    '请稍等...',
+                    'hi',
+                    '...',
+                    'OK',
+                    'ok'
+                ];
+                
+                if (systemNoise.some(noise => conv.content.trim() === noise)) {
+                    continue;
+                }
+                
+                filtered.push(conv);
             }
-            
-            return true;
-        });
+        }
+        
+        return filtered;
+    }
+    
+    /**
+     * 判断是否是 Thinking 消息
+     * @param {string} content - 消息内容
+     * @returns {boolean}
+     */
+    isThinkingMessage(content) {
+        const thinkingPatterns = [
+            /^Thinking\.{3,}$/i,                // Thinking...
+            /^Thinking\.{1,}$/i,                // Thinking.
+            /^正在思考\.{3,}$/,                 // 正在思考...
+            /^思考中\.{3,}$/,                   // 思考中...
+            /^Processing\.{3,}$/i,              // Processing...
+            /^Analyzing\.{3,}$/i,               // Analyzing...
+        ];
+        
+        const trimmedContent = content.trim();
+        return thinkingPatterns.some(pattern => pattern.test(trimmedContent));
     }
     
     /**

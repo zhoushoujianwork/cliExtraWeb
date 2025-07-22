@@ -92,34 +92,50 @@ async function loadTmuxChatHistory(instanceId) {
         console.log('📡 开始加载实例日志:', instanceId);
         statsText.textContent = '正在获取日志...';
         
-        // 获取日志内容
-        const response = await fetch(`/api/instance/${instanceId}/log`);
-        const data = await response.json();
+        // 获取实例信息和日志内容
+        const [logResponse, instanceResponse] = await Promise.all([
+            fetch(`/api/instance/${instanceId}/log`),
+            fetch(`/api/instances`)
+        ]);
         
-        if (!data.success) {
-            throw new Error(data.error || '获取日志失败');
+        const logData = await logResponse.json();
+        const instanceData = await instanceResponse.json();
+        
+        if (!logData.success) {
+            throw new Error(logData.error || '获取日志失败');
         }
         
-        if (!data.log_content) {
+        if (!logData.log_content) {
             throw new Error('日志内容为空');
         }
         
-        console.log('📄 日志获取成功，长度:', data.log_content.length);
+        // 查找实例角色信息
+        let instanceRole = 'default';
+        if (instanceData.success && instanceData.instances) {
+            const instance = instanceData.instances.find(inst => inst.id === instanceId);
+            if (instance && instance.role) {
+                instanceRole = instance.role;
+                console.log('🎭 检测到实例角色:', instanceRole);
+            }
+        }
+        
+        console.log('📄 日志获取成功，长度:', logData.log_content.length);
         statsText.textContent = '正在解析对话...';
         
         // 使用 Tmux 聊天解析器解析内容
-        const conversations = window.tmuxChatParser.parseLogContent(data.log_content);
+        const conversations = window.tmuxChatParser.parseLogContent(logData.log_content);
         
         console.log('🎯 解析完成，对话数量:', conversations.length);
         statsText.textContent = `共 ${conversations.length} 条对话`;
         
-        // 使用微信风格渲染器渲染聊天记录
+        // 使用微信风格渲染器渲染聊天记录，传递角色信息
         container.innerHTML = '<div id="tmuxChatMessages" class="tmux-chat-messages"></div>';
-        window.weChatChatRenderer.renderChatMessages(conversations, 'tmuxChatMessages');
+        window.weChatChatRenderer.renderChatMessages(conversations, 'tmuxChatMessages', instanceRole);
         
         // 存储对话数据供导出使用
         window.currentChatData = {
             instanceId: instanceId,
+            instanceRole: instanceRole,
             conversations: conversations,
             timestamp: new Date().toISOString()
         };
