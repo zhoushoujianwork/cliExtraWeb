@@ -583,8 +583,7 @@ async function broadcastToAllInstances(message) {
         console.log('广播结果:', result);
         
         if (result.success) {
-            const count = result.sent_count || 0;
-            addSystemMessage(`📢 消息已广播给 ${count} 个实例`);
+            addSystemMessage(`📢 消息已广播给所有实例`);
         } else {
             addSystemMessage(`❌ 广播失败: ${result.error}`);
         }
