@@ -84,13 +84,17 @@ class InstanceManager:
         conversations_dir = self.get_namespace_conversations_dir(namespace)
         return os.path.join(conversations_dir, f'{instance_id}.json')
     
-    def sync_screen_instances(self):
+    def sync_screen_instances(self, namespace_filter: Optional[str] = None):
         """同步tmux实例状态 - 使用cliExtra list --json命令"""
         try:
             self._check_cliExtra()
             
-            # 使用cliExtra list --json命令获取实例列表
-            result = subprocess.run(['cliExtra', 'list', '--json'], capture_output=True, text=True, timeout=10)
+            # 构建cliExtra list命令
+            cmd = ['cliExtra', 'list', '--json']
+            if namespace_filter:
+                cmd.extend(['-n', namespace_filter])
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             
             if result.returncode != 0:
                 logger.error(f"获取实例列表失败: {result.stderr}")
@@ -199,6 +203,67 @@ class InstanceManager:
     def get_instance(self, instance_id: str) -> Optional[QInstance]:
         """获取指定实例"""
         return self.instances.get(instance_id)
+    
+    def get_instances_by_namespace(self, namespace: str) -> List[Dict[str, any]]:
+        """获取指定namespace的实例列表"""
+        try:
+            self._check_cliExtra()
+            
+            # 使用cliExtra list --json -n命令获取指定namespace的实例
+            result = subprocess.run(
+                ['cliExtra', 'list', '--json', '-n', namespace], 
+                capture_output=True, text=True, timeout=10
+            )
+            
+            if result.returncode != 0:
+                logger.error(f"获取namespace {namespace} 实例列表失败: {result.stderr}")
+                return []
+            
+            # 解析JSON输出
+            try:
+                data = json.loads(result.stdout.strip())
+                instances_data = data.get('instances', [])
+                
+                # 转换为标准格式
+                instances = []
+                for instance_data in instances_data:
+                    instance_id = instance_data.get('id')
+                    if not instance_id:
+                        continue
+                    
+                    instance_info = {
+                        'id': instance_id,
+                        'status': instance_data.get('status', 'Unknown'),
+                        'session': instance_data.get('session', ''),
+                        'namespace': instance_data.get('namespace', namespace),
+                        'attach_command': instance_data.get('attach_command', ''),
+                        # 新增字段
+                        'project_dir': instance_data.get('project_dir', ''),
+                        'project_path': instance_data.get('project_dir', ''),  # 保持兼容性
+                        'role': instance_data.get('role', ''),
+                        'tools': instance_data.get('tools', []),
+                        'started_at': instance_data.get('started_at', ''),
+                        'pid': instance_data.get('pid', ''),
+                        'log_file': instance_data.get('log_file', ''),
+                        'log_size': instance_data.get('log_size', 0),
+                        'log_modified': instance_data.get('log_modified', ''),
+                        'conversation_file': instance_data.get('conversation_file', ''),
+                        # 保持向后兼容的字段
+                        'created_at': instance_data.get('started_at', ''),
+                        'last_activity': instance_data.get('log_modified', '')
+                    }
+                    instances.append(instance_info)
+                
+                logger.info(f"获取到namespace {namespace} 的 {len(instances)} 个实例")
+                return instances
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"解析namespace {namespace} 实例列表JSON失败: {e}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"获取namespace {namespace} 实例列表失败: {str(e)}")
+            return []
     
     def send_message(self, instance_id: str, message: str) -> Dict[str, any]:
         """向cliExtra实例发送消息"""
@@ -315,6 +380,47 @@ class InstanceManager:
             return {'success': False, 'error': error_msg}
         except Exception as e:
             logger.error(f'重启cliExtra实例 {instance_id} 失败: {str(e)}')
+            return {'success': False, 'error': str(e)}
+    
+    def broadcast_message(self, message: str) -> Dict[str, any]:
+        """广播消息到所有运行中的实例"""
+        try:
+            self._check_cliExtra()
+            
+            result = subprocess.run(
+                ['cliExtra', 'broadcast', message],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            if result.returncode == 0:
+                # 解析输出获取发送数量
+                output = result.stdout.strip()
+                sent_count = 0
+                
+                # 尝试从输出中提取发送数量
+                import re
+                count_match = re.search(r'(\d+)', output)
+                if count_match:
+                    sent_count = int(count_match.group(1))
+                else:
+                    # 如果无法解析，获取当前运行实例数量作为估计
+                    with self._lock:
+                        sent_count = len([inst for inst in self.instances.values() 
+                                        if inst.status not in ['Not Running', 'Stopped', 'Terminated']])
+                
+                logger.info(f'广播消息成功，发送给 {sent_count} 个实例')
+                return {'success': True, 'sent_count': sent_count}
+            else:
+                error_msg = result.stderr or result.stdout
+                logger.error(f'广播消息失败: {error_msg}')
+                return {'success': False, 'error': error_msg}
+                
+        except subprocess.TimeoutExpired:
+            error_msg = '广播消息超时'
+            logger.error('广播消息超时')
+            return {'success': False, 'error': error_msg}
+        except Exception as e:
+            logger.error(f'广播消息失败: {str(e)}')
             return {'success': False, 'error': str(e)}
     
     def get_instance_output(self, instance_id: str, last_position: int = 0) -> List[Dict[str, any]]:
@@ -536,10 +642,56 @@ class InstanceManager:
     def get_available_namespaces(self) -> List[Dict[str, any]]:
         """获取所有可用的namespace"""
         try:
+            # 首先尝试使用 cliExtra ns show 命令获取完整信息
+            try:
+                result = subprocess.run(['cliExtra', 'ns', 'show'], 
+                                      capture_output=True, text=True, timeout=10)
+                
+                if result.returncode == 0:
+                    namespaces = []
+                    lines = result.stdout.strip().split('\n')
+                    
+                    # 解析输出，跳过标题行
+                    parsing_data = False
+                    for line in lines:
+                        line = line.strip()
+                        if line.startswith('NAME'):
+                            parsing_data = True
+                            continue
+                        elif line.startswith('----'):
+                            continue
+                        elif parsing_data and line:
+                            # 解析每一行：NAME INSTANCES INSTANCE_IDS
+                            parts = line.split()
+                            if len(parts) >= 2:
+                                ns_name = parts[0]
+                                instance_count = int(parts[1]) if parts[1].isdigit() else 0
+                                
+                                namespaces.append({
+                                    'name': ns_name,
+                                    'instance_count': instance_count,
+                                    'path': os.path.join(self.work_dir, 'namespaces', ns_name)
+                                })
+                    
+                    # 确保default namespace存在
+                    if not any(ns['name'] == 'default' for ns in namespaces):
+                        namespaces.append({
+                            'name': 'default', 
+                            'instance_count': 0,
+                            'path': os.path.join(self.work_dir, 'namespaces', 'default')
+                        })
+                    
+                    logger.info(f'通过 cliExtra ns show 获取到 {len(namespaces)} 个namespace')
+                    return sorted(namespaces, key=lambda x: x['name'])
+                    
+            except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError) as e:
+                logger.warning(f'cliExtra ns show 命令执行失败，回退到文件系统扫描: {str(e)}')
+            
+            # 回退方案：从文件系统获取
             namespaces_dir = os.path.join(self.work_dir, 'namespaces')
             
             if not os.path.exists(namespaces_dir):
-                return [{'name': 'default', 'instance_count': 0}]
+                return [{'name': 'default', 'instance_count': 0, 'path': ''}]
             
             namespaces = []
             
@@ -561,13 +713,14 @@ class InstanceManager:
             
             # 确保default namespace存在
             if not any(ns['name'] == 'default' for ns in namespaces):
-                namespaces.append({'name': 'default', 'instance_count': 0})
+                namespaces.append({'name': 'default', 'instance_count': 0, 'path': ''})
             
+            logger.info(f'通过文件系统扫描获取到 {len(namespaces)} 个namespace')
             return sorted(namespaces, key=lambda x: x['name'])
             
         except Exception as e:
             logger.error(f'获取namespace列表失败: {str(e)}')
-            return [{'name': 'default', 'instance_count': 0}]
+            return [{'name': 'default', 'instance_count': 0, 'path': ''}]
         """停止cliExtra实例"""
         try:
             self._check_cliExtra()
