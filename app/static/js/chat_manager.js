@@ -629,18 +629,39 @@ function addMessageToChat(sender, message) {
 function addInstanceMessage(instanceId, content, timestamp) {
     const container = document.getElementById('chatHistory');
     
+    // 使用富文本渲染器处理消息内容
+    let renderedContent = content;
+    if (window.richTextRenderer && window.richTextRenderer.isReady()) {
+        try {
+            renderedContent = window.richTextRenderer.render(content);
+        } catch (error) {
+            console.warn('富文本渲染失败，使用原始内容:', error);
+            renderedContent = `<pre style="white-space: pre-wrap; margin: 0;">${escapeHtml(content)}</pre>`;
+        }
+    } else {
+        // 如果富文本渲染器未就绪，保持原有的预格式化显示
+        renderedContent = `<pre style="white-space: pre-wrap; margin: 0;">${escapeHtml(content)}</pre>`;
+    }
+    
     const messageDiv = document.createElement('div');
     messageDiv.className = 'message mb-2';
     messageDiv.innerHTML = `
         <small class="text-muted">${timestamp}</small>
         <div class="d-flex">
             <strong class="me-2 text-success">实例${instanceId}:</strong>
-            <span style="white-space: pre-wrap;">${content}</span>
+            <div class="message-content rendered-content flex-grow-1">${renderedContent}</div>
         </div>
     `;
     
     container.appendChild(messageDiv);
     container.scrollTop = container.scrollHeight;
+    
+    // 如果消息包含代码块，初始化语法高亮
+    if (window.hljs && messageDiv.querySelectorAll('pre code').length > 0) {
+        messageDiv.querySelectorAll('pre code').forEach((block) => {
+            window.hljs.highlightElement(block);
+        });
+    }
 }
 
 // 添加系统消息
@@ -650,16 +671,45 @@ function addSystemMessage(message) {
     
     const messageDiv = document.createElement('div');
     messageDiv.className = 'system-message mb-2 p-2 border-start border-info border-3';
+    
+    // 使用富文本渲染器处理消息内容
+    let renderedContent = message;
+    if (window.richTextRenderer && window.richTextRenderer.isReady()) {
+        try {
+            renderedContent = window.richTextRenderer.render(message);
+        } catch (error) {
+            console.warn('富文本渲染失败，使用原始内容:', error);
+            renderedContent = escapeHtml(message);
+        }
+    } else {
+        // 如果富文本渲染器未就绪，进行基本的 HTML 转义
+        renderedContent = escapeHtml(message);
+    }
+    
     messageDiv.innerHTML = `
         <small class="text-muted d-block">${now}</small>
-        <div class="text-info">
+        <div class="text-info rendered-content">
             <i class="fas fa-info-circle me-1"></i>
-            <span>${message}</span>
+            <div class="message-content">${renderedContent}</div>
         </div>
     `;
     
     container.appendChild(messageDiv);
     container.scrollTop = container.scrollHeight;
+    
+    // 如果消息包含代码块，初始化语法高亮
+    if (window.hljs && messageDiv.querySelectorAll('pre code').length > 0) {
+        messageDiv.querySelectorAll('pre code').forEach((block) => {
+            window.hljs.highlightElement(block);
+        });
+    }
+}
+
+// HTML 转义函数
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // 实例管理函数
