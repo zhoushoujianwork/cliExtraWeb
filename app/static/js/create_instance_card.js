@@ -600,3 +600,57 @@ function toggleAllTools(selectAllCheckbox) {
     
     updateSelectedTools();
 }
+
+/**
+ * 更新角色选择器，支持新增的专业角色
+ */
+function updateRoleSelector() {
+    const roleSelect = document.getElementById('cardInstanceRole');
+    if (!roleSelect) return;
+
+    // 清空现有选项
+    roleSelect.innerHTML = '<option value="">选择角色（可选）</option>';
+
+    // 检查角色定义是否已加载
+    if (typeof getRolesByCategory !== 'function') {
+        console.warn('角色定义未加载，使用默认选项');
+        return;
+    }
+
+    // 获取所有角色并按类别分组
+    const rolesByCategory = getRolesByCategory();
+    
+    // 添加分组选项
+    Object.entries(rolesByCategory).forEach(([category, roles]) => {
+        const categoryNames = {
+            'backend': '🖥️ 后端开发',
+            'frontend': '🎨 前端开发', 
+            'fullstack': '🚀 全栈开发'
+        };
+        
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = categoryNames[category] || category;
+        
+        roles.forEach(role => {
+            const option = document.createElement('option');
+            option.value = role.key;
+            option.textContent = `${role.name}`;
+            option.setAttribute('data-tags', role.tags.join(','));
+            optgroup.appendChild(option);
+        });
+        
+        roleSelect.appendChild(optgroup);
+    });
+
+    console.log('✅ 角色选择器已更新，支持新增专业角色');
+}
+
+// 初始化角色选择器
+setTimeout(() => {
+    if (typeof getRolesByCategory === 'function') {
+        updateRoleSelector();
+    }
+}, 1500);
+
+// 导出函数
+window.updateRoleSelector = updateRoleSelector;
