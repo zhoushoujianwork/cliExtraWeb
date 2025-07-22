@@ -405,12 +405,118 @@ class LogChatParser {
     }
     
     /**
-     * HTML转义
+     * 渲染聊天消息到指定容器
      */
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+    renderChatMessages(conversations, containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) {
+            console.error('容器未找到:', containerId);
+            return;
+        }
+        
+        let html = '';
+        
+        conversations.forEach((conv, index) => {
+            const messageClass = conv.type === 'user' ? 'user-message' : 
+                                conv.type === 'assistant' ? 'assistant-message' : 'system-message';
+            
+            const config = this.getMessageConfig(conv.type);
+            
+            // 使用富文本渲染器处理内容
+            let renderedContent = conv.content;
+            if (conv.needsRichText && window.richTextRenderer && window.richTextRenderer.isReady()) {
+                try {
+                    renderedContent = window.richTextRenderer.render(conv.content);
+                } catch (error) {
+                    console.warn('富文本渲染失败:', error);
+                    renderedContent = `<pre style="white-space: pre-wrap; margin: 0;">${this.escapeHtml(conv.content)}</pre>`;
+                }
+            } else {
+                renderedContent = `<pre style="white-space: pre-wrap; margin: 0;">${this.escapeHtml(conv.content)}</pre>`;
+            }
+            
+            html += `
+                <div class="log-message-item mb-3 ${messageClass}" data-message-id="${conv.id}">
+                    <div class="d-flex justify-content-${config.align}">
+                        <div class="message-bubble" style="max-width: 75%;">
+                            <div class="d-flex align-items-start ${config.align === 'end' ? 'flex-row-reverse' : ''}">
+                                <div class="message-avatar ${config.bgColor} text-white rounded-circle d-flex align-items-center justify-content-center ${config.align === 'end' ? 'ms-2' : 'me-2'}" 
+                                     style="width: 36px; height: 36px; flex-shrink: 0;">
+                                    <i class="${config.icon}" style="font-size: 0.9rem;"></i>
+                                </div>
+                                <div class="message-content">
+                                    <div class="message-header d-flex ${config.align === 'end' ? 'justify-content-end' : 'justify-content-start'} align-items-center mb-1">
+                                        <small class="${config.textColor} fw-bold me-2">${config.label}</small>
+                                        <small class="text-muted">${conv.timestamp}</small>
+                                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyMessageContent('${conv.id}')" title="复制内容">
+                                            <i class="fas fa-copy" style="font-size: 0.7rem;"></i>
+                                        </button>
+                                    </div>
+                                    <div class="message-body ${config.align === 'end' ? 'bg-primary text-white' : 'bg-light'} p-3 rounded rendered-content">
+                                        ${renderedContent}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        if (html === '') {
+            html = `
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-comments fa-3x mb-3"></i>
+                    <h5>暂无对话记录</h5>
+                    <p>该实例还没有生成对话记录</p>
+                </div>
+            `;
+        }
+        
+        container.innerHTML = html;
+        
+        // 初始化代码高亮
+        if (window.hljs) {
+            container.querySelectorAll('pre code').forEach((block) => {
+                window.hljs.highlightElement(block);
+            });
+        }
+        
+        // 滚动到底部
+        container.scrollTop = container.scrollHeight;
+        
+        console.log(`✅ 已渲染 ${conversations.length} 条聊天消息到 ${containerId}`);
+    }
+    
+    /**
+     * 获取消息配置
+     */
+    getMessageConfig(messageType) {
+        const configs = {
+            'user': {
+                icon: 'fas fa-user',
+                bgColor: 'bg-primary',
+                textColor: 'text-primary',
+                label: '用户',
+                align: 'end'
+            },
+            'assistant': {
+                icon: 'fas fa-robot',
+                bgColor: 'bg-success',
+                textColor: 'text-success',
+                label: 'AI助手',
+                align: 'start'
+            },
+            'system': {
+                icon: 'fas fa-cog',
+                bgColor: 'bg-info',
+                textColor: 'text-info',
+                label: '系统',
+                align: 'center'
+            }
+        };
+        
+        return configs[messageType] || configs['assistant'];
     }
 }
 
@@ -684,9 +790,24 @@ async function loadLogChatFromInstance(instanceId) {
     }
 }
 
+// 复制消息内容
+function copyMessageContent(messageId) {
+    const messageElement = document.querySelector(`[data-message-id="${messageId}"] .message-body`);
+    if (!messageElement) return;
+    
+    const textContent = messageElement.textContent || messageElement.innerText;
+    
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(textContent).then(() => {
+            console.log('消息内容已复制');
+        });
+    }
+}
+
 // 导出函数到全局作用域
 window.showLogChatModal = showLogChatModal;
 window.loadLogChatFromInstance = loadLogChatFromInstance;
+window.copyMessageContent = copyMessageContent;
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
