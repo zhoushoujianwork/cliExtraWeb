@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/image_paste.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/rich_text.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/conversation.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/wechat_chat.css') }}">
 <!-- Highlight.js 样式 -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
 {% endblock %}
@@ -260,6 +261,9 @@
 <script src="{{ url_for('static', filename='js/image_paste_handler.js') }}"></script>
 <script src="{{ url_for('static', filename='js/rich_text_renderer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/role_definitions.js') }}"></script>
+<script src="{{ url_for('static', filename='js/tmux_chat_parser.js') }}"></script>
+<script src="{{ url_for('static', filename='js/wechat_chat_renderer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/tmux_chat_modal.js') }}"></script>
 
 <script>
 // 显示当前namespace的对话历史

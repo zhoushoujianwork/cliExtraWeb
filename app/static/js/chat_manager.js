@@ -329,7 +329,7 @@ function toggleRawContent(messageDiv, rawContent) {
 }
 
 // 安全调用日志聊天模态框
-function safeShowLogChatModal(instanceId) {
+function showTmuxChatModal(instanceId) {
     if (typeof window.showLogChatModal === 'function') {
         window.showLogChatModal(instanceId);
     } else {
@@ -1082,7 +1082,7 @@ function updateInstancesList(instances) {
                                     <button class="btn btn-outline-warning" onclick="conversationHistory.showInstanceHistory('${instance.id}', '${instance.namespace || 'default'}')" title="对话历史">
                                         <i class="fas fa-history"></i>
                                     </button>
-                                    <button class="btn btn-outline-success" onclick="safeShowLogChatModal('${instance.id}')" title="聊天记录">
+                                    <button class="btn btn-outline-success" onclick="showTmuxChatModal('${instance.id}')" title="聊天记录">
                                         <i class="fas fa-comments"></i>
                                     </button>
                                     <button class="btn btn-outline-secondary" onclick="showInstanceDetails('${instance.id}')" title="详情">
@@ -1092,7 +1092,7 @@ function updateInstancesList(instances) {
                                         <i class="fas fa-stop"></i>
                                     </button>
                                 ` : `
-                                    <button class="btn btn-outline-success" onclick="safeShowLogChatModal('${instance.id}')" title="聊天记录">
+                                    <button class="btn btn-outline-success" onclick="showTmuxChatModal('${instance.id}')" title="聊天记录">
                                         <i class="fas fa-comments"></i>
                                     </button>
                                     <button class="btn btn-outline-secondary" onclick="showInstanceDetails('${instance.id}')" title="详情">
