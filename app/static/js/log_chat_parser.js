@@ -683,3 +683,12 @@ async function loadLogChatFromInstance(instanceId) {
         `;
     }
 }
+
+// 导出函数到全局作用域
+window.showLogChatModal = showLogChatModal;
+window.loadLogChatFromInstance = loadLogChatFromInstance;
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📄 日志聊天解析器已加载');
+});

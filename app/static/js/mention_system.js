@@ -54,14 +54,14 @@ class MentionSystem {
         });
         
         // 添加回车发送支持
-        this.messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !this.isShowingMentions) {
-                e.preventDefault();
-                if (typeof sendMessage === 'function') {
-                    sendMessage();
-                }
-            }
-        });
+        // this.messageInput.addEventListener('keypress', (e) => {
+        //     if (e.key === 'Enter' && !e.shiftKey && !this.isShowingMentions) {
+        //         e.preventDefault();
+        //         if (typeof sendMessage === 'function') {
+        //             sendMessage();
+        //         }
+        //     }
+        // });
         
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.mention-panel') && e.target !== this.messageInput) {

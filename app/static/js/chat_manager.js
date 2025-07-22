@@ -328,6 +328,16 @@ function toggleRawContent(messageDiv, rawContent) {
     }
 }
 
+// 安全调用日志聊天模态框
+function safeShowLogChatModal(instanceId) {
+    if (typeof window.showLogChatModal === 'function') {
+        window.showLogChatModal(instanceId);
+    } else {
+        console.error('showLogChatModal 函数未定义，请检查 log_chat_parser.js 是否正确加载');
+        alert('聊天记录功能暂时不可用，请刷新页面重试');
+    }
+}
+
 // HTML转义函数
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -415,15 +425,15 @@ document.addEventListener('DOMContentLoaded', function() {
     startAutoRefresh();
     
     // 绑定回车发送消息
-    const messageInput = document.getElementById('messageInput');
-    if (messageInput) {
-        messageInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
-    }
+    // const messageInput = document.getElementById('messageInput');
+    // if (messageInput) {
+    //     messageInput.addEventListener('keypress', function(e) {
+    //         if (e.key === 'Enter' && !e.shiftKey) {
+    //             e.preventDefault();
+    //             sendMessage();
+    //         }
+    //     });
+    // }
 });
 
 // @功能设置
@@ -1072,7 +1082,7 @@ function updateInstancesList(instances) {
                                     <button class="btn btn-outline-warning" onclick="conversationHistory.showInstanceHistory('${instance.id}', '${instance.namespace || 'default'}')" title="对话历史">
                                         <i class="fas fa-history"></i>
                                     </button>
-                                    <button class="btn btn-outline-success" onclick="showLogChatModal('${instance.id}')" title="聊天记录">
+                                    <button class="btn btn-outline-success" onclick="safeShowLogChatModal('${instance.id}')" title="聊天记录">
                                         <i class="fas fa-comments"></i>
                                     </button>
                                     <button class="btn btn-outline-secondary" onclick="showInstanceDetails('${instance.id}')" title="详情">
@@ -1082,7 +1092,7 @@ function updateInstancesList(instances) {
                                         <i class="fas fa-stop"></i>
                                     </button>
                                 ` : `
-                                    <button class="btn btn-outline-success" onclick="showLogChatModal('${instance.id}')" title="聊天记录">
+                                    <button class="btn btn-outline-success" onclick="safeShowLogChatModal('${instance.id}')" title="聊天记录">
                                         <i class="fas fa-comments"></i>
                                     </button>
                                     <button class="btn btn-outline-secondary" onclick="showInstanceDetails('${instance.id}')" title="详情">
