@@ -1,0 +1,246 @@
+/**
+ * 对话消息样式
+ * 支持用户、AI助手、系统消息的不同显示风格
+ */
+
+/* 对话消息容器 */
+.conversation-message {
+    margin-bottom: 1rem;
+    animation: messageSlideIn 0.3s ease-out;
+}
+
+/* 消息气泡 */
+.message-bubble {
+    max-width: 70%;
+}
+
+/* 消息头像 */
+.message-avatar {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* 消息内容 */
+.message-content {
+    flex-grow: 1;
+    min-width: 0; /* 防止flex item溢出 */
+}
+
+/* 消息体 */
+.message-body {
+    border-radius: 12px;
+    word-wrap: break-word;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    position: relative;
+}
+
+/* 用户消息样式 */
+.conversation-message .justify-content-end .message-body {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: white;
+}
+
+.conversation-message .justify-content-end .message-body::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    right: -8px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid #007bff;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+}
+
+/* AI助手消息样式 */
+.conversation-message .justify-content-start .message-body {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+}
+
+.conversation-message .justify-content-start .message-body::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    left: -9px;
+    width: 0;
+    height: 0;
+    border-right: 8px solid #f8f9fa;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+}
+
+/* 系统消息样式 */
+.conversation-message .justify-content-center .message-body {
+    background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+    color: white;
+    text-align: center;
+    border-radius: 20px;
+    font-size: 0.9rem;
+}
+
+/* 消息头部 */
+.message-header {
+    margin-bottom: 4px;
+}
+
+.message-header small {
+    font-size: 0.75rem;
+}
+
+/* 代码块在消息中的样式 */
+.message-body .code-block-container {
+    margin: 8px 0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.message-body .code-block-header {
+    padding: 4px 8px;
+    font-size: 0.7rem;
+}
+
+.message-body pre {
+    margin: 0;
+    padding: 8px;
+    font-size: 0.8rem;
+    background: rgba(0,0,0,0.05);
+}
+
+/* 用户消息中的代码块 */
+.justify-content-end .message-body pre {
+    background: rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.9);
+}
+
+/* 图片在消息中的样式 */
+.message-body .image-container {
+    margin: 8px 0;
+}
+
+.message-body .rendered-image {
+    max-width: 100%;
+    border-radius: 8px;
+}
+
+/* 列表样式 */
+.message-body ul,
+.message-body ol {
+    margin: 8px 0;
+    padding-left: 1.5rem;
+}
+
+.message-body li {
+    margin-bottom: 4px;
+}
+
+/* 链接样式 */
+.message-body a {
+    color: inherit;
+    text-decoration: underline;
+}
+
+.justify-content-end .message-body a {
+    color: rgba(255,255,255,0.9);
+}
+
+/* 动画效果 */
+@keyframes messageSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 消息时间戳悬停效果 */
+.message-header:hover .text-muted {
+    color: #6c757d !important;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .message-bubble {
+        max-width: 85%;
+    }
+    
+    .message-avatar {
+        width: 28px;
+        height: 28px;
+    }
+    
+    .message-body {
+        font-size: 0.9rem;
+        padding: 8px 12px;
+    }
+    
+    .message-header small {
+        font-size: 0.7rem;
+    }
+}
+
+/* 深色模式支持 */
+@media (prefers-color-scheme: dark) {
+    .conversation-message .justify-content-start .message-body {
+        background: #2d3748;
+        border-color: #4a5568;
+        color: #e2e8f0;
+    }
+    
+    .conversation-message .justify-content-start .message-body::before {
+        border-right-color: #2d3748;
+    }
+    
+    .message-body pre {
+        background: rgba(255,255,255,0.1);
+    }
+}
+
+/* 滚动条样式 */
+#chatHistory::-webkit-scrollbar {
+    width: 6px;
+}
+
+#chatHistory::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+#chatHistory::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+#chatHistory::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* 消息加载状态 */
+.message-loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.message-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

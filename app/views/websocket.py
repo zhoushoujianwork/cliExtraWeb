@@ -147,35 +147,110 @@ def monitor_instance_output(instance_id):
                     logger.info(f'🎯 完整回复完成: {instance_id} - {len(output["content"])} 字符')
                     
                     try:
-                        # 使用内容过滤器清理内容
+                        # 使用新的对话解析功能
+                        raw_content = output.get('raw_content', output['content'])
+                        
+                        # 解析对话内容，区分发言者
+                        conversations = content_filter.parse_conversation(raw_content)
+                        
+                        logger.info(f'📝 对话解析完成: 解析出 {len(conversations)} 条消息')
+                        
+                        # 处理每条对话消息
+                        for conv in conversations:
+                            # 为每条消息添加实例信息
+                            conv['instance_id'] = instance_id
+                            conv['timestamp'] = conv.get('timestamp', output['timestamp'])
+                            
+                            # 根据消息类型进行不同处理
+                            if conv['type'] == 'user':
+                                # 用户消息
+                                chat_manager.add_chat_message(
+                                    sender=f'用户@{instance_id}',
+                                    message=conv['content'],
+                                    instance_id=instance_id,
+                                    message_type='user'
+                                )
+                                
+                                # 发送用户消息事件
+                                if socketio:
+                                    socketio.emit('user_message', {
+                                        'instance_id': instance_id,
+                                        'content': conv['content'],
+                                        'timestamp': conv['timestamp'],
+                                        'needs_rich_text': conv.get('needs_rich_text', False)
+                                    }, room=f'instance_{instance_id}')
+                                    
+                            elif conv['type'] == 'assistant':
+                                # AI助手消息
+                                formatted_content = content_filter.format_for_display(conv['content'])
+                                
+                                chat_manager.add_chat_message(
+                                    sender=f'AI助手@{instance_id}',
+                                    message=formatted_content,
+                                    instance_id=instance_id,
+                                    message_type='assistant'
+                                )
+                                
+                                # 发送AI消息事件
+                                if socketio:
+                                    socketio.emit('assistant_message', {
+                                        'instance_id': instance_id,
+                                        'content': formatted_content,
+                                        'raw_content': conv['content'],
+                                        'timestamp': conv['timestamp'],
+                                        'needs_rich_text': conv.get('needs_rich_text', True),
+                                        'is_markdown': True
+                                    }, room=f'instance_{instance_id}')
+                                    
+                            elif conv['type'] == 'system':
+                                # 系统消息
+                                chat_manager.add_chat_message(
+                                    sender=f'系统@{instance_id}',
+                                    message=conv['content'],
+                                    instance_id=instance_id,
+                                    message_type='system'
+                                )
+                                
+                                # 发送系统消息事件
+                                if socketio:
+                                    socketio.emit('system_message', {
+                                        'instance_id': instance_id,
+                                        'content': conv['content'],
+                                        'timestamp': conv['timestamp'],
+                                        'needs_rich_text': False
+                                    }, room=f'instance_{instance_id}')
+                        
+                        # 发送完整对话解析完成事件
+                        if socketio:
+                            socketio.emit('conversation_parsed', {
+                                'instance_id': instance_id,
+                                'conversations': conversations,
+                                'total_messages': len(conversations),
+                                'timestamp': output['timestamp']
+                            }, room=f'instance_{instance_id}')
+                            
+                        logger.info(f'✅ 对话消息已全部处理完成: {instance_id}')
+                        
+                    except Exception as e:
+                        logger.error(f'❌ 处理对话解析时出错: {str(e)}')
+                        # 降级处理：使用原有的简单处理方式
                         raw_content = output.get('raw_content', output['content'])
                         cleaned_content = content_filter.clean_content(raw_content)
                         formatted_content = content_filter.format_for_display(cleaned_content)
                         
-                        logger.info(f'📝 内容清理完成: 原始{len(raw_content)}字符 -> 清理后{len(cleaned_content)}字符')
-                        
                         chat_manager.add_chat_message(
-                            sender=f'tmux实例{instance_id}',
-                            message=formatted_content,  # 使用清理后的内容
+                            sender=f'实例{instance_id}',
+                            message=formatted_content,
                             instance_id=instance_id
                         )
                         
-                        # 发送完成信号
-                        if socketio:  # 检查socketio是否可用
+                        if socketio:
                             socketio.emit('instance_complete_response', {
                                 'instance_id': instance_id,
-                                'content': formatted_content,  # 发送清理后的内容
-                                'raw_content': raw_content,  # 保留原始内容用于调试
-                                'cleaned_content': cleaned_content,  # 清理后但未格式化的内容
+                                'content': formatted_content,
                                 'timestamp': output['timestamp'],
-                                'is_markdown': True,
-                                'is_complete': True
+                                'is_fallback': True
                             }, room=f'instance_{instance_id}')
-                            logger.info(f'✅ 完整回复已发送到房间: instance_{instance_id}')
-                        else:
-                            logger.warning('⚠️  socketio 不可用，跳过完整回复推送')
-                    except Exception as e:
-                        logger.error(f'❌ 处理完整回复时出错: {str(e)}')
             
             time.sleep(0.2)  # 更频繁的检查以支持流式输出
             

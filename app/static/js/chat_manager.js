@@ -49,7 +49,31 @@ socket.on('monitoring_stopped', function(data) {
     addSystemMessage(`实例${data.instance_id}监控已停止`);
 });
 
-// 处理流式输出
+// 处理用户消息
+socket.on('user_message', function(data) {
+    console.log('📥 收到用户消息:', data);
+    addConversationMessage(data.instance_id, 'user', data.content, data.timestamp, data.needs_rich_text);
+});
+
+// 处理AI助手消息
+socket.on('assistant_message', function(data) {
+    console.log('📥 收到AI助手消息:', data);
+    addConversationMessage(data.instance_id, 'assistant', data.content, data.timestamp, data.needs_rich_text);
+});
+
+// 处理系统消息
+socket.on('system_message', function(data) {
+    console.log('📥 收到系统消息:', data);
+    addConversationMessage(data.instance_id, 'system', data.content, data.timestamp, data.needs_rich_text);
+});
+
+// 处理对话解析完成事件
+socket.on('conversation_parsed', function(data) {
+    console.log('🎯 对话解析完成:', data);
+    addSystemMessage(`✅ 实例 ${data.instance_id} 解析出 ${data.total_messages} 条对话消息`);
+});
+
+// 处理流式输出（保持兼容）
 socket.on('instance_streaming_response', function(data) {
     console.log('📥 收到流式输出:', data.instance_id, '内容长度:', data.accumulated_content.length);
     
@@ -625,7 +649,84 @@ function addMessageToChat(sender, message) {
     container.scrollTop = container.scrollHeight;
 }
 
-// 添加实例消息
+// 添加对话消息（支持不同消息类型）
+function addConversationMessage(instanceId, messageType, content, timestamp, needsRichText = false) {
+    const container = document.getElementById('chatHistory');
+    
+    // 消息类型配置
+    const messageConfig = {
+        'user': {
+            icon: 'fas fa-user',
+            bgColor: 'bg-primary',
+            textColor: 'text-primary',
+            label: '用户',
+            align: 'end'
+        },
+        'assistant': {
+            icon: 'fas fa-robot',
+            bgColor: 'bg-success',
+            textColor: 'text-success',
+            label: 'AI助手',
+            align: 'start'
+        },
+        'system': {
+            icon: 'fas fa-cog',
+            bgColor: 'bg-info',
+            textColor: 'text-info',
+            label: '系统',
+            align: 'center'
+        }
+    };
+    
+    const config = messageConfig[messageType] || messageConfig['assistant'];
+    
+    // 处理消息内容
+    let renderedContent = content;
+    if (needsRichText && window.richTextRenderer && window.richTextRenderer.isReady()) {
+        try {
+            renderedContent = window.richTextRenderer.render(content);
+        } catch (error) {
+            console.warn('富文本渲染失败，使用原始内容:', error);
+            renderedContent = `<pre style="white-space: pre-wrap; margin: 0;">${escapeHtml(content)}</pre>`;
+        }
+    } else {
+        renderedContent = `<pre style="white-space: pre-wrap; margin: 0;">${escapeHtml(content)}</pre>`;
+    }
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `conversation-message mb-3 d-flex justify-content-${config.align}`;
+    messageDiv.innerHTML = `
+        <div class="message-bubble" style="max-width: 70%;">
+            <div class="d-flex align-items-start ${config.align === 'end' ? 'flex-row-reverse' : ''}">
+                <div class="message-avatar ${config.bgColor} text-white rounded-circle d-flex align-items-center justify-content-center ${config.align === 'end' ? 'ms-2' : 'me-2'}" 
+                     style="width: 32px; height: 32px; flex-shrink: 0;">
+                    <i class="${config.icon}" style="font-size: 0.8rem;"></i>
+                </div>
+                <div class="message-content">
+                    <div class="message-header d-flex ${config.align === 'end' ? 'justify-content-end' : 'justify-content-start'} align-items-center mb-1">
+                        <small class="${config.textColor} fw-bold me-2">${config.label}@${instanceId}</small>
+                        <small class="text-muted">${timestamp}</small>
+                    </div>
+                    <div class="message-body ${config.align === 'end' ? 'bg-primary text-white' : 'bg-light'} p-2 rounded rendered-content">
+                        ${renderedContent}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(messageDiv);
+    container.scrollTop = container.scrollHeight;
+    
+    // 如果消息包含代码块，初始化语法高亮
+    if (window.hljs && messageDiv.querySelectorAll('pre code').length > 0) {
+        messageDiv.querySelectorAll('pre code').forEach((block) => {
+            window.hljs.highlightElement(block);
+        });
+    }
+}
+
+// 添加实例消息（保持向后兼容）
 function addInstanceMessage(instanceId, content, timestamp) {
     const container = document.getElementById('chatHistory');
     
