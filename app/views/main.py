@@ -23,6 +23,11 @@ def roles():
     """角色管理页面"""
     return render_template('role_manager.html')
 
+@bp.route('/workflow')
+def workflow_manager():
+    """Workflow 管理页面"""
+    return render_template('workflow_manager.html')
+
 @bp.route('/health')
 def health():
     """健康检查"""
