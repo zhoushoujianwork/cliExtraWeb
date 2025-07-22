@@ -1,0 +1,286 @@
+/* 实例卡片样式 - 重新设计 */
+.instance-card {
+    transition: all 0.3s ease;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.instance-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-color: #007bff;
+}
+
+.instance-card.instance-stopped {
+    opacity: 0.7;
+    background-color: #f8f9fa;
+}
+
+/* 状态徽章样式 */
+.instance-card .badge {
+    font-size: 0.75em;
+    font-weight: 500;
+}
+
+/* 角色颜色区分 */
+.instance-card .badge.bg-info.bg-opacity-75 {
+    background-color: rgba(13, 202, 240, 0.75) !important;
+    color: white;
+}
+
+.instance-card .badge.bg-success.bg-opacity-75 {
+    background-color: rgba(25, 135, 84, 0.75) !important;
+    color: white;
+}
+
+.instance-card .badge.bg-warning.bg-opacity-75 {
+    background-color: rgba(255, 193, 7, 0.75) !important;
+    color: #000;
+}
+
+.instance-card .badge.bg-primary.bg-opacity-75 {
+    background-color: rgba(13, 110, 253, 0.75) !important;
+    color: white;
+}
+
+/* 工具标签样式 */
+.instance-card .badge.bg-light {
+    border: 1px solid #dee2e6;
+    font-size: 0.7em;
+}
+
+/* 按钮组样式 */
+.instance-card .btn-group-vertical .btn {
+    width: 40px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.instance-card .btn-group-vertical .btn i {
+    font-size: 0.8em;
+}
+
+/* 卡片标题样式 */
+.instance-card .card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+/* 信息行样式 */
+.instance-card .row.g-2 {
+    margin-bottom: 0.5rem;
+}
+
+.instance-card small {
+    font-size: 0.8em;
+    line-height: 1.4;
+}
+
+/* 项目路径样式 */
+.instance-card .font-monospace {
+    font-size: 0.75em;
+    background-color: #f8f9fa;
+    padding: 2px 4px;
+    border-radius: 3px;
+    word-break: break-all;
+}
+
+/* 图标样式 */
+.instance-card .fas {
+    width: 12px;
+    text-align: center;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .instance-card .btn-group-vertical {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+    
+    .instance-card .btn-group-vertical .btn {
+        width: auto;
+        margin-right: 2px;
+        margin-bottom: 2px;
+    }
+    
+    .instance-card .row.g-2 .col-md-6,
+    .instance-card .row.g-2 .col-md-8,
+    .instance-card .row.g-2 .col-md-4 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+    
+    .instance-card .col-md-4.text-end {
+        text-align: left !important;
+    }
+}
+
+/* 实例列表容器 */
+#instancesList {
+    max-height: 75vh;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+
+#instancesList::-webkit-scrollbar {
+    width: 6px;
+}
+
+#instancesList::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+#instancesList::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+#instancesList::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* 卡片动画 */
+.instance-card {
+    animation: fadeInUp 0.4s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 状态指示 */
+.instance-card[data-status="Attached"] {
+    border-left: 4px solid #28a745;
+}
+
+.instance-card[data-status="Detached"] {
+    border-left: 4px solid #ffc107;
+}
+
+.instance-card[data-status="Stopped"] {
+    border-left: 4px solid #dc3545;
+}
+
+/* 模态框样式优化 */
+.modal-body table td:first-child {
+    width: 30%;
+    font-weight: 500;
+    color: #495057;
+}
+
+.modal-body .bg-light {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+}
+
+/* 复制提示样式 */
+.toast-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #28a745;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 6px;
+    z-index: 9999;
+    font-size: 0.9em;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* 创建实例卡片样式 */
+#createInstanceCard {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1050;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.tool-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.tool-item input[type="checkbox"] {
+    margin: 0;
+}
+
+.directory-browser {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.directory-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+}
+
+.directory-item:hover {
+    background-color: #f8f9fa;
+}
+
+.directory-item:last-child {
+    border-bottom: none;
+}
+
+.directory-item.selected {
+    background-color: #e3f2fd;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    #createInstanceCard {
+        width: 95%;
+        max-height: 95vh;
+    }
+    
+    .tools-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        max-height: 150px;
+    }
+}

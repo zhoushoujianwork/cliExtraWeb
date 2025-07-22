@@ -432,6 +432,10 @@ function setupAtMentionFeature() {
 
 function showAllInstanceSuggestions() {
     const suggestions = document.getElementById('instanceSuggestions');
+    if (!suggestions) {
+        console.warn('instanceSuggestions元素不存在');
+        return;
+    }
     
     if (availableInstances.length > 0) {
         suggestions.innerHTML = availableInstances.map((instance, index) => `
@@ -474,48 +478,123 @@ function selectInstanceFromSuggestion(instanceId) {
 }
 
 function hideSuggestions() {
-    document.getElementById('instanceSuggestions').style.display = 'none';
+    const suggestions = document.getElementById('instanceSuggestions');
+    if (suggestions) {
+        suggestions.style.display = 'none';
+    }
     currentAtPosition = -1;
 }
 
 // 发送消息
 function sendMessage() {
-    const message = document.getElementById('messageInput').value.trim();
+    const messageInput = document.getElementById('messageInput');
+    if (!messageInput) {
+        console.error('找不到消息输入框');
+        return;
+    }
+    
+    const message = messageInput.value.trim();
     
     if (!message) {
         alert('请输入消息');
         return;
     }
     
-    const { instances, cleanMessage } = parseMessage(message);
+    // 使用mention系统解析消息
+    const { mentions, cleanMessage } = window.mentionSystem ? 
+        window.mentionSystem.parseMessage(message) : 
+        { mentions: [], cleanMessage: message };
     
-    if (instances.length === 0) {
-        alert('请使用@符号选择要发送消息的实例');
+    console.log('发送消息:', { message, mentions, cleanMessage });
+    
+    // 简化验证逻辑：只要原始消息不为空就可以发送
+    if (!message.trim()) {
+        alert('请输入消息');
         return;
     }
     
-    // 显示用户消息（使用新的样式）
+    // 显示用户消息
     const timestamp = new Date().toLocaleTimeString();
     addUserMessage(message, timestamp);
-    document.getElementById('messageInput').value = '';
+    messageInput.value = '';
     
-    // 发送到各个实例
-    instances.forEach(instanceId => {
-        fetch('/api/send', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ instance_id: instanceId, message: cleanMessage })
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (!data.success) {
-                addSystemMessage(`向实例${instanceId}发送失败: ${data.error}`);
-            }
-        });
-    });
+    // 根据是否有@来决定发送方式
+    if (mentions.length > 0) {
+        // 有@实例，使用send发送给指定实例
+        console.log('发送给指定实例:', mentions);
+        // 如果有@但没有其他内容，发送空消息给指定实例
+        const messageToSend = cleanMessage.trim() || '';
+        sendToSpecificInstances(mentions, messageToSend);
+    } else {
+        // 没有@，使用broadcast全局发送
+        console.log('广播消息');
+        broadcastToAllInstances(message);
+    }
 }
 
-// 解析@提及
+async function sendToSpecificInstances(instanceIds, message) {
+    console.log('开始发送给指定实例:', instanceIds, message);
+    
+    for (const instanceId of instanceIds) {
+        try {
+            console.log(`发送消息给实例 ${instanceId}:`, message);
+            
+            const response = await fetch('/api/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    instance_id: instanceId,
+                    message: message
+                })
+            });
+            
+            const result = await response.json();
+            console.log(`发送给 ${instanceId} 的结果:`, result);
+            
+            if (result.success) {
+                addSystemMessage(`✅ 消息已发送给 @${instanceId}`);
+            } else {
+                addSystemMessage(`❌ 发送给 @${instanceId} 失败: ${result.error}`);
+            }
+        } catch (error) {
+            console.error(`发送给 ${instanceId} 失败:`, error);
+            addSystemMessage(`❌ 发送给 @${instanceId} 失败: ${error.message}`);
+        }
+    }
+}
+
+async function broadcastToAllInstances(message) {
+    console.log('开始广播消息:', message);
+    
+    try {
+        const response = await fetch('/api/broadcast', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message: message
+            })
+        });
+        
+        const result = await response.json();
+        console.log('广播结果:', result);
+        
+        if (result.success) {
+            const count = result.sent_count || 0;
+            addSystemMessage(`📢 消息已广播给 ${count} 个实例`);
+        } else {
+            addSystemMessage(`❌ 广播失败: ${result.error}`);
+        }
+    } catch (error) {
+        console.error('广播失败:', error);
+        addSystemMessage(`❌ 广播失败: ${error.message}`);
+    }
+}
+
+// 解析@提及 (旧版本，保留兼容性)
 function parseMessage(message) {
     const atMatches = message.match(/@实例(\w+)/g);
     if (!atMatches) {
@@ -682,14 +761,57 @@ function cleanAll() {
     }
 }
 
+/**
+ * 格式化文件大小
+ */
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    if (bytes === undefined || bytes === null) return '未知';
+    
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
 function refreshInstances() {
-    fetch('/api/instances')
+    // 获取当前选中的namespace - 添加更安全的检查
+    let currentNamespace = 'default';
+    
+    try {
+        if (typeof getCurrentNamespace === 'function') {
+            currentNamespace = getCurrentNamespace() || 'default';
+        } else if (typeof window.getCurrentNamespace === 'function') {
+            currentNamespace = window.getCurrentNamespace() || 'default';
+        } else {
+            // 直接从DOM获取
+            const select = document.getElementById('currentNamespaceSelect');
+            if (select && select.value) {
+                currentNamespace = select.value;
+            }
+        }
+    } catch (error) {
+        console.warn('获取当前namespace失败，使用默认值:', error);
+        currentNamespace = 'default';
+    }
+    
+    // 构建API URL，包含namespace参数
+    const apiUrl = `/api/instances?namespace=${encodeURIComponent(currentNamespace)}`;
+    
+    fetch(apiUrl)
         .then(r => r.json())
         .then(data => {
             if (data.success) {
                 availableInstances = data.instances;
                 updateInstancesList(data.instances);
+                console.log(`刷新了namespace "${currentNamespace}" 的 ${data.instances.length} 个实例`);
+            } else {
+                console.error('获取实例列表失败:', data.error);
             }
+        })
+        .catch(error => {
+            console.error('获取实例列表失败:', error);
         });
 }
 
@@ -699,51 +821,300 @@ function updateInstancesList(instances) {
     
     container.innerHTML = instances.map(instance => {
         const isRunning = instance.status !== 'Not Running' && instance.status !== 'Stopped' && instance.status !== 'Terminated';
-        const statusClass = instance.status === 'Attached' ? 'success' : 
-                           instance.status === 'Detached' ? 'warning' : 'danger';
+        
+        // 状态颜色
+        let statusColor = 'secondary';
+        if (instance.status === 'Attached') statusColor = 'success';
+        else if (instance.status === 'Detached') statusColor = 'warning';
+        else statusColor = 'danger';
+        
+        // 角色CSS类
+        let roleClass = '';
+        if (instance.role) {
+            roleClass = `role-${instance.role.toLowerCase()}`;
+        }
+        
+        // 格式化工具
+        const toolsHtml = instance.tools && Array.isArray(instance.tools) && instance.tools.length > 0
+            ? instance.tools.map(tool => `<span class="badge bg-light me-1">${tool}</span>`).join('')
+            : '<span class="text-muted">无</span>';
+        
+        // 格式化时间
+        const timeDisplay = instance.started_at 
+            ? new Date(instance.started_at).toLocaleString('zh-CN', {
+                month: '2-digit', day: '2-digit', 
+                hour: '2-digit', minute: '2-digit'
+              })
+            : '未知';
         
         return `
-            <div class="instance-item mb-2 p-3 border rounded ${isRunning ? '' : 'instance-stopped'}" 
-                 data-namespace="${instance.namespace || ''}"
-                 data-status="${instance.status}"
+            <div class="card instance-card ${isRunning ? '' : 'instance-stopped'}" 
+                 data-status="${instance.status}" 
                  data-instance-id="${instance.id}">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div class="d-flex align-items-center gap-2">
-                        <strong class="${isRunning ? '' : 'text-muted'}">${instance.id}</strong>
-                        <span class="badge bg-${statusClass}">
-                            ${instance.status}
-                        </span>
-                    </div>
-                    <div class="btn-group btn-group-sm">
-                        ${isRunning ? `
-                            <button class="btn btn-info" onclick="createWebTerminal('${instance.id}')" title="Web终端">
-                                <i class="fas fa-desktop"></i>
-                            </button>
-                            <button class="btn btn-warning" onclick="conversationHistory.showInstanceHistory('${instance.id}', '${instance.namespace || 'default'}')" title="对话历史">
-                                <i class="fas fa-history"></i>
-                            </button>
-                            <button class="btn btn-outline-info" onclick="showInstanceDetails('${instance.id}')" title="查看详情">
-                                <i class="fas fa-info-circle"></i>
-                            </button>
-                            <button class="btn btn-danger" onclick="stopInstance('${instance.id}')" title="停止实例">
-                                <i class="fas fa-stop"></i>
-                            </button>
-                        ` : `
-                            <button class="btn btn-outline-info" onclick="showInstanceDetails('${instance.id}')" title="查看详情">
-                                <i class="fas fa-info-circle"></i>
-                            </button>
-                            <button class="btn btn-outline-success" onclick="resumeInstance('${instance.id}')" title="恢复实例">
-                                <i class="fas fa-play"></i>
-                            </button>
-                            <button class="btn btn-outline-danger" onclick="cleanInstance('${instance.id}')" title="清理实例">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        `}
+                <div class="card-body">
+                    <!-- 头部信息 -->
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title mb-2">
+                                <span class="me-2">${instance.id}</span>
+                                <span class="badge bg-${statusColor} me-2">${instance.status}</span>
+                                ${instance.role ? `<span class="badge ${roleClass}">${instance.role}</span>` : ''}
+                            </h6>
+                            
+                            <!-- 基本信息 -->
+                            <div class="row mb-2">
+                                <div class="col-md-6">
+                                    <small class="text-muted">
+                                        <i class="fas fa-layer-group"></i>
+                                        ${instance.namespace || 'default'}
+                                    </small>
+                                </div>
+                                <div class="col-md-6">
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock"></i>
+                                        ${timeDisplay}
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <!-- 项目路径 -->
+                            ${instance.project_dir ? `
+                                <div class="mb-2">
+                                    <small class="text-muted">
+                                        <i class="fas fa-folder"></i>
+                                        <span class="text-monospace">${instance.project_dir}</span>
+                                    </small>
+                                </div>
+                            ` : ''}
+                            
+                            <!-- 工具和日志 -->
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <small class="text-muted">
+                                        <i class="fas fa-tools"></i>
+                                        ${toolsHtml}
+                                    </small>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    ${instance.log_size !== undefined ? `
+                                        <small class="text-muted">
+                                            <i class="fas fa-file-alt"></i>
+                                            ${formatFileSize(instance.log_size)}
+                                        </small>
+                                    ` : ''}
+                                    ${instance.pid ? `
+                                        <small class="text-muted d-block">
+                                            <i class="fas fa-microchip"></i>
+                                            ${instance.pid}
+                                        </small>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 操作按钮 -->
+                        <div class="ms-3">
+                            <div class="btn-group-vertical">
+                                ${isRunning ? `
+                                    <button class="btn btn-outline-info" onclick="createWebTerminal('${instance.id}')" title="Web终端">
+                                        <i class="fas fa-desktop"></i>
+                                    </button>
+                                    <button class="btn btn-outline-warning" onclick="conversationHistory.showInstanceHistory('${instance.id}', '${instance.namespace || 'default'}')" title="对话历史">
+                                        <i class="fas fa-history"></i>
+                                    </button>
+                                    <button class="btn btn-outline-success" onclick="showLogChatModal('${instance.id}')" title="聊天记录">
+                                        <i class="fas fa-comments"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary" onclick="showInstanceDetails('${instance.id}')" title="详情">
+                                        <i class="fas fa-info"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" onclick="stopInstance('${instance.id}')" title="停止">
+                                        <i class="fas fa-stop"></i>
+                                    </button>
+                                ` : `
+                                    <button class="btn btn-outline-success" onclick="showLogChatModal('${instance.id}')" title="聊天记录">
+                                        <i class="fas fa-comments"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary" onclick="showInstanceDetails('${instance.id}')" title="详情">
+                                        <i class="fas fa-info"></i>
+                                    </button>
+                                    <button class="btn btn-outline-success" onclick="resumeInstance('${instance.id}')" title="恢复">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" onclick="cleanInstance('${instance.id}')" title="清理">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                `}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         `;
     }).join('');
+}
+
+/**
+ * 显示实例详细信息
+ */
+function showInstanceDetails(instanceId) {
+    const instance = availableInstances.find(inst => inst.id === instanceId);
+    if (!instance) {
+        alert('实例不存在');
+        return;
+    }
+    
+    // 创建详情模态框
+    const modalHtml = `
+        <div class="modal fade" id="instanceDetailsModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-info-circle me-2"></i>
+                            实例详情: ${instance.id}
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="text-primary">基本信息</h6>
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td><strong>实例ID:</strong></td>
+                                        <td>${instance.id}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>状态:</strong></td>
+                                        <td><span class="badge bg-${instance.status === 'Attached' ? 'success' : instance.status === 'Detached' ? 'warning' : 'danger'}">${instance.status}</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Namespace:</strong></td>
+                                        <td>${instance.namespace || 'default'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>角色:</strong></td>
+                                        <td>${instance.role || '未设置'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>进程ID:</strong></td>
+                                        <td>${instance.pid || '未知'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>会话名:</strong></td>
+                                        <td><code>${instance.session || '未知'}</code></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-primary">项目信息</h6>
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td><strong>项目目录:</strong></td>
+                                        <td><small>${instance.project_dir || '未设置'}</small></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>启动时间:</strong></td>
+                                        <td><small>${instance.started_at || '未知'}</small></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>工具列表:</strong></td>
+                                        <td>
+                                            ${instance.tools && instance.tools.length > 0 
+                                                ? instance.tools.map(tool => `<span class="badge bg-secondary me-1">${tool}</span>`).join('')
+                                                : '<span class="text-muted">无工具</span>'
+                                            }
+                                        </td>
+                                    </tr>
+                                </table>
+                                
+                                <h6 class="text-primary mt-3">日志信息</h6>
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td><strong>日志文件:</strong></td>
+                                        <td><small>${instance.log_file || '未知'}</small></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>日志大小:</strong></td>
+                                        <td>${formatFileSize(instance.log_size)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>最后修改:</strong></td>
+                                        <td><small>${instance.log_modified || '未知'}</small></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>对话文件:</strong></td>
+                                        <td><small>${instance.conversation_file || '未知'}</small></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <h6 class="text-primary">连接命令</h6>
+                            <div class="bg-light p-2 rounded">
+                                <code>${instance.attach_command || '未知'}</code>
+                                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('${instance.attach_command}')" title="复制命令">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        ${instance.status !== 'Not Running' ? `
+                            <button type="button" class="btn btn-info" onclick="createWebTerminal('${instance.id}')">
+                                <i class="fas fa-desktop me-1"></i>Web终端
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 移除已存在的模态框
+    const existingModal = document.getElementById('instanceDetailsModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // 添加新的模态框
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('instanceDetailsModal'));
+    modal.show();
+}
+
+/**
+ * 复制文本到剪贴板
+ */
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        // 显示复制成功提示
+        const toast = document.createElement('div');
+        toast.className = 'toast-notification';
+        toast.textContent = '已复制到剪贴板';
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 9999;
+        `;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.remove();
+        }, 2000);
+    }).catch(err => {
+        console.error('复制失败:', err);
+    });
 }
 
 function clearSystemLogs() {

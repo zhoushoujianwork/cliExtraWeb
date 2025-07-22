@@ -4,6 +4,9 @@ API endpoints for Q Chat Manager
 from flask import Blueprint, request, jsonify
 import logging
 import subprocess
+import os
+import json
+import platform
 
 from app.services.instance_manager import instance_manager
 from app.services.chat_manager import chat_manager
@@ -14,12 +17,19 @@ logger = logging.getLogger(__name__)
 
 @bp.route('/instances', methods=['GET'])
 def get_instances():
-    """获取所有实例"""
+    """获取实例列表，支持namespace过滤"""
     try:
-        # 同步tmux实例状态
-        instance_manager.sync_screen_instances()
+        # 获取namespace参数
+        namespace = request.args.get('namespace', '').strip()
         
-        instances = instance_manager.get_instances()
+        if namespace:
+            # 获取指定namespace的实例
+            instances = instance_manager.get_instances_by_namespace(namespace)
+        else:
+            # 获取所有实例（保持向后兼容）
+            instance_manager.sync_screen_instances()
+            instances = instance_manager.get_instances()
+        
         return jsonify({'success': True, 'instances': instances})
     except Exception as e:
         logger.error(f"获取实例列表失败: {str(e)}")
@@ -734,6 +744,68 @@ def terminate_web_terminal(instance_id):
 
 # ==================== 角色管理 API ====================
 
+@bp.route('/instance/<instance_id>/log', methods=['GET'])
+def get_instance_log(instance_id):
+    """获取实例日志内容"""
+    try:
+        # 直接尝试所有可能的namespace
+        namespaces = ['q_cli', 'default', 'frontend', 'backend', 'devops', 'test']
+        log_content = None
+        found_namespace = None
+        file_path = None
+        
+        for ns in namespaces:
+            log_file_path = os.path.expanduser(
+                f"~/Library/Application Support/cliExtra/namespaces/{ns}/logs/instance_{instance_id}_tmux.log"
+            )
+            logger.info(f"检查日志文件: {log_file_path}")
+            
+            if os.path.exists(log_file_path):
+                logger.info(f"找到日志文件在namespace: {ns}")
+                found_namespace = ns
+                file_path = log_file_path
+                
+                # 读取文件内容
+                try:
+                    with open(log_file_path, 'r', encoding='utf-8') as f:
+                        log_content = f.read()
+                    logger.info(f"成功读取日志文件，大小: {len(log_content)} 字符")
+                    break
+                except UnicodeDecodeError:
+                    try:
+                        with open(log_file_path, 'r', encoding='latin-1') as f:
+                            log_content = f.read()
+                        logger.info(f"使用latin-1编码读取日志文件，大小: {len(log_content)} 字符")
+                        break
+                    except Exception as e:
+                        logger.error(f"读取日志文件失败: {e}")
+                        continue
+        
+        if log_content is None:
+            return jsonify({
+                'success': True, 
+                'log_content': '',
+                'message': f'未找到实例 {instance_id} 的日志文件',
+                'instance_id': instance_id,
+                'searched_namespaces': namespaces
+            })
+        
+        # 获取文件大小
+        file_size = os.path.getsize(file_path) if file_path else 0
+        
+        return jsonify({
+            'success': True,
+            'log_content': log_content,
+            'file_size': file_size,
+            'file_path': file_path,
+            'instance_id': instance_id,
+            'namespace': found_namespace
+        })
+        
+    except Exception as e:
+        logger.error(f"读取实例日志失败: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @bp.route('/roles', methods=['GET'])
 def get_available_roles():
     """获取所有可用角色"""
@@ -919,4 +991,204 @@ def update_role_content(role_name):
             
     except Exception as e:
         logger.error(f"更新角色内容失败: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@bp.route('/broadcast', methods=['POST'])
+def broadcast_message():
+    """广播消息到所有实例"""
+    try:
+        data = request.get_json()
+        message = data.get('message', '').strip()
+        
+        if not message:
+            return jsonify({'success': False, 'error': '消息不能为空'}), 400
+        
+        result = instance_manager.broadcast_message(message)
+        
+        if result['success']:
+            chat_manager.add_system_log(f'广播消息: {message}')
+            return jsonify({
+                'success': True,
+                'sent_count': result.get('sent_count', 0),
+                'message': f'消息已广播给 {result.get("sent_count", 0)} 个实例'
+            })
+        else:
+            logger.error(f'广播消息失败: {result.get("error", "未知错误")}')
+            return jsonify({'success': False, 'error': result.get('error', '广播失败')}), 500
+            
+    except Exception as e:
+        logger.error(f'广播消息失败: {str(e)}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+@bp.route('/tools', methods=['GET'])
+def get_tools():
+    """获取可用工具列表"""
+    try:
+        result = subprocess.run(
+            ['cliExtra', 'tools', 'list', '-o', 'json'],
+            capture_output=True, text=True, timeout=10
+        )
+        
+        if result.returncode == 0:
+            try:
+                tools_data = json.loads(result.stdout)
+                # cliExtra返回的格式是 {"tools": [{"name": "...", "description": "..."}], "count": N}
+                if 'tools' in tools_data and isinstance(tools_data['tools'], list):
+                    return jsonify({
+                        'success': True,
+                        'tools': tools_data['tools']
+                    })
+                else:
+                    # 如果格式不符合预期，返回默认工具列表
+                    default_tools = [
+                        {'name': 'git', 'description': 'Git版本控制'},
+                        {'name': 'docker', 'description': 'Docker容器'},
+                        {'name': 'npm', 'description': 'Node.js包管理'},
+                        {'name': 'python', 'description': 'Python解释器'},
+                        {'name': 'node', 'description': 'Node.js运行时'}
+                    ]
+                    return jsonify({
+                        'success': True,
+                        'tools': default_tools
+                    })
+            except json.JSONDecodeError:
+                # 如果JSON解析失败，返回默认工具列表
+                default_tools = [
+                    {'name': 'git', 'description': 'Git版本控制'},
+                    {'name': 'docker', 'description': 'Docker容器'},
+                    {'name': 'npm', 'description': 'Node.js包管理'},
+                    {'name': 'python', 'description': 'Python解释器'},
+                    {'name': 'node', 'description': 'Node.js运行时'}
+                ]
+                return jsonify({
+                    'success': True,
+                    'tools': default_tools
+                })
+        else:
+            # 命令执行失败，返回默认工具列表
+            default_tools = [
+                {'name': 'git', 'description': 'Git版本控制'},
+                {'name': 'docker', 'description': 'Docker容器'},
+                {'name': 'npm', 'description': 'Node.js包管理'},
+                {'name': 'python', 'description': 'Python解释器'},
+                {'name': 'node', 'description': 'Node.js运行时'}
+            ]
+            return jsonify({
+                'success': True,
+                'tools': default_tools
+            })
+            
+    except Exception as e:
+        logger.error(f'获取工具列表失败: {str(e)}')
+        # 返回默认工具列表
+        default_tools = [
+            {'name': 'git', 'description': 'Git版本控制'},
+            {'name': 'docker', 'description': 'Docker容器'},
+            {'name': 'npm', 'description': 'Node.js包管理'},
+            {'name': 'python', 'description': 'Python解释器'},
+            {'name': 'node', 'description': 'Node.js运行时'}
+        ]
+        return jsonify({
+            'success': True,
+            'tools': default_tools
+        })
+
+@bp.route('/browse_directory', methods=['POST'])
+def browse_directory():
+    """浏览目录 - 跨平台兼容"""
+    try:
+        data = request.get_json()
+        current_path = data.get('path', '')
+        
+        # 获取默认起始路径
+        if not current_path:
+            if platform.system() == 'Windows':
+                current_path = os.path.expanduser('~\\Desktop')  # Windows桌面
+                if not os.path.exists(current_path):
+                    current_path = os.path.expanduser('~')  # 用户主目录
+            else:
+                current_path = os.path.expanduser('~')  # Unix/Linux/macOS用户主目录
+        
+        # 确保路径存在且是目录
+        if not os.path.exists(current_path) or not os.path.isdir(current_path):
+            current_path = os.path.expanduser('~')
+        
+        # 规范化路径
+        current_path = os.path.abspath(current_path)
+        
+        # 获取目录内容
+        items = []
+        try:
+            # 添加父目录选项（除非是根目录）
+            parent_dir = os.path.dirname(current_path)
+            if parent_dir != current_path:
+                items.append({
+                    'name': '..',
+                    'path': parent_dir,
+                    'type': 'directory',
+                    'is_parent': True
+                })
+            
+            # 获取当前目录下的所有项目
+            try:
+                dir_items = os.listdir(current_path)
+            except PermissionError:
+                return jsonify({
+                    'success': False,
+                    'error': '没有权限访问该目录'
+                }), 403
+            
+            # 分别处理目录和文件
+            directories = []
+            files = []
+            
+            for item in dir_items:
+                # 跳过隐藏文件/目录（以.开头的）
+                if item.startswith('.'):
+                    continue
+                    
+                item_path = os.path.join(current_path, item)
+                
+                try:
+                    if os.path.isdir(item_path):
+                        directories.append({
+                            'name': item,
+                            'path': item_path,
+                            'type': 'directory',
+                            'is_parent': False
+                        })
+                    elif os.path.isfile(item_path):
+                        # 只显示常见的项目文件
+                        if item.lower().endswith(('.json', '.md', '.txt', '.py', '.js', '.html', '.css', '.yml', '.yaml', '.xml', '.gitignore', 'readme', 'package.json', 'requirements.txt')):
+                            files.append({
+                                'name': item,
+                                'path': item_path,
+                                'type': 'file',
+                                'is_parent': False
+                            })
+                except (OSError, PermissionError):
+                    # 跳过无法访问的项目
+                    continue
+            
+            # 按名称排序并合并（目录在前，文件在后）
+            directories.sort(key=lambda x: x['name'].lower())
+            files.sort(key=lambda x: x['name'].lower())
+            items.extend(directories)
+            items.extend(files)
+                    
+        except Exception as e:
+            logger.error(f'读取目录内容失败: {str(e)}')
+            return jsonify({
+                'success': False,
+                'error': f'读取目录内容失败: {str(e)}'
+            }), 500
+            
+        return jsonify({
+            'success': True,
+            'current_path': current_path,
+            'items': items,
+            'system': platform.system()
+        })
+        
+    except Exception as e:
+        logger.error(f'浏览目录失败: {str(e)}')
         return jsonify({'success': False, 'error': str(e)}), 500

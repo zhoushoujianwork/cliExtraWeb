@@ -111,15 +111,15 @@ class XTermWebTerminal {
                             <i class="fas fa-terminal me-2"></i>
                             tmux会话: ${this.sessionName}
                         </h5>
-                        <div class="d-flex gap-2">
+                        <div class="d-flex gap-2 align-items-center">
                             <span id="connection-status-${this.instanceId}" class="badge bg-warning">连接中...</span>
-                            <button class="btn btn-sm btn-warning" onclick="webTerminals['${this.instanceId}'].detach()">
+                            <button class="btn btn-sm btn-warning" onclick="webTerminals['${this.instanceId}'].detach()" title="分离会话，继续在后台运行">
                                 <i class="fas fa-eject me-1"></i>分离
                             </button>
-                            <button class="btn btn-sm btn-danger" onclick="webTerminals['${this.instanceId}'].terminate()">
+                            <button class="btn btn-sm btn-danger" onclick="webTerminals['${this.instanceId}'].terminate()" title="终止Web连接">
                                 <i class="fas fa-times me-1"></i>终止
                             </button>
-                            <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="关闭" title="关闭终端(自动分离)"></button>
                         </div>
                     </div>
                     <div class="modal-body p-0 flex-grow-1 d-flex flex-column">
@@ -128,7 +128,7 @@ class XTermWebTerminal {
                     <div class="modal-footer bg-secondary border-0 py-2 flex-shrink-0">
                         <small class="text-light">
                             <i class="fas fa-info-circle me-1"></i>
-                            使用 Ctrl+B, D 分离会话 | ESC 退出全屏 | 终端会自动适配窗口大小
+                            关闭终端会自动分离会话 | Ctrl+B, D 手动分离 | ESC 或 X 关闭终端
                         </small>
                     </div>
                 </div>
@@ -250,6 +250,13 @@ class XTermWebTerminal {
         }
         
         this.modal.addEventListener('hidden.bs.modal', () => {
+            // 模态框关闭时，如果还在连接状态，先执行分离
+            if (this.isConnected) {
+                this.socket.emit('terminal_detach', {
+                    instance_id: this.instanceId,
+                    session_name: this.sessionName
+                });
+            }
             this.cleanup();
         });
     }
@@ -347,7 +354,7 @@ class XTermWebTerminal {
             });
             
             setTimeout(() => {
-                this.close();
+                this.forceClose(); // 使用forceClose避免递归
             }, 1000);
         }
     }
@@ -364,13 +371,14 @@ class XTermWebTerminal {
                 });
                 
                 setTimeout(() => {
-                    this.close();
+                    this.forceClose(); // 使用forceClose避免递归
                 }, 1000);
             }
         }
     }
     
-    close() {
+    forceClose() {
+        // 直接关闭，不执行分离操作
         this.cleanup();
         
         if (this.modal) {
@@ -384,6 +392,29 @@ class XTermWebTerminal {
                     this.modal.parentNode.removeChild(this.modal);
                 }
             }, 300);
+        }
+    }
+    
+    close() {
+        // 所有关闭操作都执行分离，确保tmux会话可以再次连接
+        if (this.isConnected) {
+            this.detach();
+        } else {
+            // 如果没有连接，直接清理
+            this.cleanup();
+            
+            if (this.modal) {
+                const modalInstance = bootstrap.Modal.getInstance(this.modal);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+                
+                setTimeout(() => {
+                    if (this.modal && this.modal.parentNode) {
+                        this.modal.parentNode.removeChild(this.modal);
+                    }
+                }, 300);
+            }
         }
     }
     
