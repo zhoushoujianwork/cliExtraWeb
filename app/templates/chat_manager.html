@@ -351,6 +351,107 @@
     </div>
 </div>
 
+<!-- 新建实例模态框 -->
+<div class="modal fade" id="createInstanceModal" tabindex="-1" aria-labelledby="createInstanceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createInstanceModalLabel">
+                    <i class="fas fa-plus-circle"></i> 新建 Q CLI 实例
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createInstanceForm">
+                    <!-- Namespace 选择 -->
+                    <div class="mb-3">
+                        <label for="instanceNamespace" class="form-label">Namespace</label>
+                        <select class="form-select" id="instanceNamespace" required>
+                            <!-- 选项将通过JavaScript动态加载 -->
+                        </select>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle"></i> 
+                            选择实例所属的 namespace
+                        </div>
+                    </div>
+                    
+                    <!-- 实例名称 -->
+                    <div class="mb-3">
+                        <label for="instanceName" class="form-label">实例名称</label>
+                        <input type="text" class="form-control" id="instanceName" placeholder="请输入实例名称 (可选)" >
+                        <div class="form-text">
+                            <i class="fas fa-info-circle"></i> 
+                            留空将自动生成名称
+                        </div>
+                    </div>
+                    
+                    <!-- 角色选择 -->
+                    <div class="mb-3">
+                        <label for="instanceRole" class="form-label">实例角色</label>
+                        <select class="form-select" id="instanceRole" required>
+                            <option value="">请选择角色</option>
+                            <option value="fullstack">全栈工程师</option>
+                            <option value="frontend">前端工程师</option>
+                            <option value="backend">后端工程师</option>
+                            <option value="devops">运维工程师</option>
+                            <option value="test">测试工程师</option>
+                            <option value="reviewer">代码审查工程师</option>
+                        </select>
+                        <div class="form-text">
+                            <i class="fas fa-user-tag"></i> 
+                            选择实例的专业角色
+                        </div>
+                    </div>
+                    
+                    <!-- 工作目录类型 -->
+                    <div class="mb-3">
+                        <label class="form-label">工作目录</label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="pathType" id="localPath" value="local" checked>
+                                    <label class="form-check-label" for="localPath">
+                                        <i class="fas fa-folder"></i> 本地路径
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="pathType" id="gitPath" value="git">
+                                    <label class="form-check-label" for="gitPath">
+                                        <i class="fab fa-git-alt"></i> Git 地址
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 路径输入 -->
+                    <div class="mb-3">
+                        <label for="instancePath" class="form-label">路径</label>
+                        <input type="text" class="form-control" id="instancePath" placeholder="请输入本地路径或Git地址" required>
+                        <div class="form-text" id="pathHelpText">
+                            <i class="fas fa-info-circle"></i> 
+                            请输入本地目录的绝对路径
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>提示：</strong>新建的实例将在指定的 namespace 中运行，使用选定的角色配置。
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-success" onclick="createInstanceFromModal()">
+                    <i class="fas fa-plus"></i> 创建实例
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 删除 Namespace 确认模态框 -->
 <div class="modal fade" id="deleteNamespaceModal" tabindex="-1" aria-labelledby="deleteNamespaceModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -632,6 +733,14 @@ document.addEventListener('DOMContentLoaded', function() {
     initTerminal();
     initAutoResizeTextarea();
     
+    // 添加路径类型切换监听器
+    const localPathRadio = document.getElementById('localPath');
+    const gitPathRadio = document.getElementById('gitPath');
+    if (localPathRadio && gitPathRadio) {
+        localPathRadio.addEventListener('change', updatePathHelpText);
+        gitPathRadio.addEventListener('change', updatePathHelpText);
+    }
+    
     // namespace管理器会自动加载实例
     // 定期刷新实例列表
     setInterval(() => {
@@ -666,6 +775,22 @@ function initAutoResizeTextarea() {
                 e.preventDefault();
                 sendMessage();
             }
+        } else if (e.key === 'Escape') {
+            // ESC 清空输入框
+            e.preventDefault();
+            clearMessageInput();
+        } else if (e.ctrlKey && e.key === 'l') {
+            // Ctrl+L 清空聊天记录
+            e.preventDefault();
+            clearChatMessages();
+        } else if (e.ctrlKey && e.key === 'k') {
+            // Ctrl+K 快速聚焦到输入框
+            e.preventDefault();
+            textarea.focus();
+        } else if (e.key === 'ArrowUp' && textarea.value === '') {
+            // 上箭头键：重新编辑上一条消息（当输入框为空时）
+            e.preventDefault();
+            recallLastMessage();
         }
     });
     
@@ -673,7 +798,127 @@ function initAutoResizeTextarea() {
     autoResize();
 }
 
-// Namespace 管理功能
+// 实例管理功能
+function createInstance() {
+    showCreateInstanceModal();
+}
+
+function showCreateInstanceModal() {
+    // 加载当前namespace到选择器
+    loadNamespacesForInstance();
+    
+    // 设置默认值
+    const currentNs = getCurrentNamespace() || 'default';
+    document.getElementById('instanceNamespace').value = currentNs;
+    document.getElementById('instanceName').value = '';
+    document.getElementById('instanceRole').value = '';
+    document.getElementById('instancePath').value = '';
+    document.getElementById('localPath').checked = true;
+    updatePathHelpText();
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('createInstanceModal'));
+    modal.show();
+}
+
+function loadNamespacesForInstance() {
+    fetch('/api/namespaces')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('instanceNamespace');
+            select.innerHTML = '';
+            
+            if (data.success && data.namespaces) {
+                data.namespaces.forEach(ns => {
+                    const option = document.createElement('option');
+                    option.value = ns.name;
+                    option.textContent = ns.name;
+                    select.appendChild(option);
+                });
+            }
+        })
+        .catch(error => {
+            console.error('加载namespace列表失败:', error);
+        });
+}
+
+function updatePathHelpText() {
+    const isLocal = document.getElementById('localPath').checked;
+    const helpText = document.getElementById('pathHelpText');
+    const pathInput = document.getElementById('instancePath');
+    
+    if (isLocal) {
+        helpText.innerHTML = '<i class="fas fa-info-circle"></i> 请输入本地目录的绝对路径';
+        pathInput.placeholder = '例如: /Users/username/project';
+    } else {
+        helpText.innerHTML = '<i class="fas fa-info-circle"></i> 请输入Git仓库地址';
+        pathInput.placeholder = '例如: https://github.com/user/repo.git';
+    }
+}
+
+async function createInstanceFromModal() {
+    const namespace = document.getElementById('instanceNamespace').value;
+    const name = document.getElementById('instanceName').value.trim();
+    const role = document.getElementById('instanceRole').value;
+    const path = document.getElementById('instancePath').value.trim();
+    const isLocal = document.getElementById('localPath').checked;
+    
+    // 验证必填字段
+    if (!namespace) {
+        alert('请选择 namespace');
+        return;
+    }
+    
+    if (!role) {
+        alert('请选择实例角色');
+        return;
+    }
+    
+    if (!path) {
+        alert('请输入路径');
+        return;
+    }
+    
+    try {
+        const requestData = {
+            namespace: namespace,
+            role: role,
+            path: path,
+            path_type: isLocal ? 'local' : 'git'
+        };
+        
+        if (name) {
+            requestData.name = name;
+        }
+        
+        const response = await fetch('/api/start-with-config', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // 关闭模态框
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createInstanceModal'));
+            modal.hide();
+            
+            // 显示成功消息
+            showNotification(`实例创建成功: ${result.instance_id}`, 'success');
+            
+            // 重新加载实例列表
+            loadInstancesWithNamespace();
+        } else {
+            alert('创建实例失败: ' + result.error);
+        }
+    } catch (error) {
+        console.error('创建实例失败:', error);
+        alert('创建实例失败: ' + error.message);
+    }
+}
 function showCreateNamespaceModal() {
     // 清空表单
     document.getElementById('newNamespaceName').value = '';

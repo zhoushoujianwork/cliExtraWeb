@@ -8,6 +8,7 @@ import logging
 import json
 import time
 import os
+import subprocess
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -18,55 +19,169 @@ bp = Blueprint('workflow_api', __name__)
 def list_workflows():
     """获取工作流列表"""
     try:
-        from app.services.dag_workflow_service import dag_workflow_service
+        import subprocess
         
-        namespace = request.args.get('namespace', 'default')
-        
-        # 获取可用的namespace列表
-        available_namespaces = ['default', 'simple_dev', 'test', 'q_cli']
+        namespace = request.args.get('namespace', 'all')
         workflows = []
         
-        # 如果指定了namespace，只获取该namespace的workflow
+        # 首先获取所有可用的namespace列表
+        try:
+            result = subprocess.run(
+                ["qq", "workflow", "list"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0:
+                # 解析输出，提取有workflow配置的namespace
+                available_namespaces = []
+                lines = result.stdout.strip().split('\n')
+                
+                for line in lines:
+                    if '📁' in line and 'workflow.json exists' in line:
+                        # 提取namespace名称
+                        parts = line.split(' - ')
+                        if len(parts) >= 2:
+                            ns_name = parts[0].replace('📁', '').strip()
+                            available_namespaces.append(ns_name)
+                
+                logger.info("发现的namespace: {}".format(available_namespaces))
+            else:
+                # 如果命令失败，使用默认列表
+                available_namespaces = ['default']
+                logger.warning("qq workflow list 命令失败，使用默认namespace")
+                
+        except Exception as e:
+            logger.error("获取namespace列表失败: {}".format(str(e)))
+            available_namespaces = ['default']
+        
+        # 如果指定了特定namespace，只获取该namespace
         if namespace and namespace != 'all':
-            namespaces_to_check = [namespace]
+            if namespace in available_namespaces:
+                namespaces_to_check = [namespace]
+            else:
+                namespaces_to_check = []
         else:
             namespaces_to_check = available_namespaces
         
+        # 获取每个namespace的workflow配置
         for ns in namespaces_to_check:
             try:
-                # 使用DAG服务获取workflow配置
-                dag_result = dag_workflow_service.get_dag_structure(ns)
+                # 直接调用 qq workflow show 命令
+                result = subprocess.run(
+                    ["qq", "workflow", "show", ns, "-o", "json"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
                 
-                if dag_result.get("success") and dag_result.get("dag"):
-                    dag_data = dag_result["dag"]
+                if result.returncode == 0 and result.stdout.strip():
+                    # 解析输出，提取JSON部分
+                    output = result.stdout.strip()
+                    json_start = output.find('{')
                     
-                    workflow_info = {
-                        "id": dag_data.get("id", f"workflow-{ns}"),
-                        "name": dag_data.get("name", f"{ns} 工作流"),
-                        "description": dag_data.get("description", ""),
-                        "namespace": ns,
-                        "version": "2.0",
-                        "created_at": datetime.now().isoformat(),
-                        "updated_at": datetime.now().isoformat(),
-                        "node_count": len(dag_data.get("nodes", [])),
-                        "edge_count": len(dag_data.get("edges", [])),
-                        "status": dag_data.get("status", "active"),
-                        "current_node": dag_data.get("current_node")
-                    }
-                    workflows.append(workflow_info)
+                    if json_start != -1:
+                        json_str = output[json_start:]
+                        try:
+                            workflow_data = json.loads(json_str)
+                            
+                            # 构建完整的workflow信息，包含DAG数据
+                            metadata = workflow_data.get("metadata", {})
+                            nodes_data = workflow_data.get("nodes", {})
+                            edges_data = workflow_data.get("edges", [])
+                            roles_data = workflow_data.get("roles", {})
+                            
+                            # 转换节点数据为前端需要的格式
+                            dag_nodes = []
+                            for node_id, node_config in nodes_data.items():
+                                # 根据节点类型设置默认位置
+                                position = {"x": 200, "y": 200}
+                                if node_config.get("type") == "start":
+                                    position = {"x": 100, "y": 100}
+                                elif node_config.get("type") == "end":
+                                    position = {"x": 500, "y": 400}
+                                
+                                dag_node = {
+                                    "id": node_id,
+                                    "type": node_config.get("type", "task"),
+                                    "name": node_config.get("title", node_id),
+                                    "description": node_config.get("description", ""),
+                                    "role": node_config.get("owner"),
+                                    "instance_id": None,
+                                    "status": "pending",
+                                    "position": position,
+                                    "config": {
+                                        "deliverables": node_config.get("deliverables", []),
+                                        "completion_trigger": node_config.get("completion_trigger", {}),
+                                        "role_info": roles_data.get(node_config.get("owner"), {}) if node_config.get("owner") else {},
+                                        "options": node_config.get("options", [])
+                                    }
+                                }
+                                dag_nodes.append(dag_node)
+                            
+                            # 转换边数据
+                            dag_edges = []
+                            for edge_config in edges_data:
+                                dag_edge = {
+                                    "id": "{}-{}".format(edge_config["from"], edge_config["to"]),
+                                    "source": edge_config["from"],
+                                    "target": edge_config["to"],
+                                    "condition": edge_config.get("condition"),
+                                    "label": edge_config.get("label", "")
+                                }
+                                dag_edges.append(dag_edge)
+                            
+                            workflow_info = {
+                                "id": workflow_data.get("id", "workflow-{}".format(ns)),
+                                "name": metadata.get("name", "{} 工作流".format(ns)),
+                                "description": metadata.get("description", ""),
+                                "namespace": ns,
+                                "version": workflow_data.get("version", "2.0"),
+                                "created_at": datetime.now().isoformat(),
+                                "updated_at": datetime.now().isoformat(),
+                                "node_count": len(nodes_data),
+                                "edge_count": len(edges_data),
+                                "status": "active",
+                                "current_node": None,
+                                "roles": list(roles_data.keys()),
+                                # 完整的DAG数据
+                                "dag": {
+                                    "nodes": dag_nodes,
+                                    "edges": dag_edges,
+                                    "roles": roles_data,
+                                    "auto_triggers": workflow_data.get("auto_triggers", {})
+                                }
+                            }
+                            workflows.append(workflow_info)
+                            logger.info("成功获取 {} 的workflow配置".format(ns))
+                            
+                        except json.JSONDecodeError as e:
+                            logger.warning("解析 {} 的workflow JSON失败: {}".format(ns, str(e)))
+                            continue
+                    else:
+                        logger.warning("在 {} 的输出中未找到JSON".format(ns))
+                        continue
+                else:
+                    logger.info("Namespace {} 没有workflow配置或命令执行失败".format(ns))
+                    continue
                     
+            except subprocess.TimeoutExpired:
+                logger.error("获取 {} 的workflow配置超时".format(ns))
+                continue
             except Exception as e:
-                logger.warning(f"获取namespace {ns} 的workflow失败: {str(e)}")
+                logger.error("获取 {} 的workflow配置失败: {}".format(ns, str(e)))
                 continue
         
-        # 按更新时间排序
-        workflows.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
+        # 按namespace名称排序
+        workflows.sort(key=lambda x: x.get('namespace', ''))
         
         return jsonify({
             'success': True,
             'workflows': workflows,
             'namespace': namespace,
-            'total': len(workflows)
+            'total': len(workflows),
+            'available_namespaces': available_namespaces if namespace == 'all' else None
         })
         
     except Exception as e:
