@@ -177,80 +177,97 @@ def get_node_templates():
 def get_workflow(namespace, workflow_id):
     """获取工作流数据"""
     try:
-        # 临时返回示例数据，后续连接真实服务
-        sample_workflow = {
-            "id": workflow_id,
-            "name": "示例工作流",
-            "description": "这是一个示例工作流",
-            "nodes": [
-                {
-                    "id": "start-1",
-                    "type": "start",
-                    "data": {
-                        "label": "开始",
-                        "description": "工作流开始"
-                    },
-                    "position": {"x": 100, "y": 100},
-                    "style": {
-                        "backgroundColor": "#10b981",
-                        "color": "#ffffff"
-                    }
-                },
-                {
-                    "id": "task-1", 
-                    "type": "task",
-                    "data": {
-                        "label": "需求分析",
-                        "description": "分析用户需求和技术可行性",
-                        "owner": "any"
-                    },
-                    "position": {"x": 300, "y": 100},
-                    "style": {
-                        "backgroundColor": "#3b82f6",
-                        "color": "#ffffff"
-                    }
-                },
-                {
-                    "id": "end-1",
-                    "type": "end",
-                    "data": {
-                        "label": "结束", 
-                        "description": "工作流结束"
-                    },
-                    "position": {"x": 500, "y": 100},
-                    "style": {
-                        "backgroundColor": "#ef4444",
-                        "color": "#ffffff"
-                    }
-                }
-            ],
-            "edges": [
-                {
-                    "id": "edge-1",
-                    "source": "start-1",
-                    "target": "task-1",
-                    "type": "smoothstep"
-                },
-                {
-                    "id": "edge-2", 
-                    "source": "task-1",
-                    "target": "end-1",
-                    "type": "smoothstep"
-                }
-            ]
-        }
+        # 读取真实的工作流文件
+        workflow_dir = os.path.join(os.getcwd(), '.amazonq', 'workflows', namespace)
+        workflow_file = os.path.join(workflow_dir, workflow_id + '.json')
+        
+        if not os.path.exists(workflow_file):
+            return jsonify({
+                'success': False,
+                'error': '工作流不存在'
+            }), 404
+        
+        with open(workflow_file, 'r') as f:
+            workflow_data = json.load(f)
+        
+        # 转换为 React Flow 格式
+        react_flow_data = convert_to_react_flow_format(workflow_data)
         
         return jsonify({
             'success': True,
-            'workflow': sample_workflow
+            'workflow': react_flow_data
         })
         
     except Exception as e:
-        logger.error(f"获取工作流失败: {e}")
+        logger.error("获取工作流失败: {}".format(e))
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
+
+def convert_to_react_flow_format(workflow_data):
+    """将内部工作流格式转换为 React Flow 格式"""
+    react_flow_nodes = []
+    react_flow_edges = []
+    
+    # 转换节点
+    for node in workflow_data.get('nodes', []):
+        react_node = {
+            "id": node['id'],
+            "type": node['type'],
+            "data": {
+                "label": node['name'],
+                "description": node.get('description', ''),
+                "owner": node.get('owner', ''),
+                "responsibilities": node.get('responsibilities', []),
+                "deliverables": node.get('deliverables', []),
+                "style": {
+                    "backgroundColor": node.get('style', {}).get('background_color', '#ffffff'),
+                    "borderColor": node.get('style', {}).get('border_color', '#d1d5db'),
+                    "color": node.get('style', {}).get('text_color', '#000000')
+                }
+            },
+            "position": {
+                "x": node.get('position', {}).get('x', 0),
+                "y": node.get('position', {}).get('y', 0)
+            },
+            "style": {
+                "backgroundColor": node.get('style', {}).get('background_color', '#ffffff'),
+                "borderColor": node.get('style', {}).get('border_color', '#d1d5db'),
+                "color": node.get('style', {}).get('text_color', '#000000'),
+                "width": node.get('style', {}).get('width', 150),
+                "height": node.get('style', {}).get('height', 60)
+            }
+        }
+        react_flow_nodes.append(react_node)
+    
+    # 转换连线
+    for edge in workflow_data.get('edges', []):
+        react_edge = {
+            "id": edge['id'],
+            "source": edge['source_node_id'],
+            "target": edge['target_node_id'],
+            "type": "smoothstep",
+            "label": edge.get('label', ''),
+            "style": {
+                "stroke": edge.get('style', {}).get('color', '#6b7280'),
+                "strokeWidth": edge.get('style', {}).get('width', 2)
+            }
+        }
+        react_flow_edges.append(react_edge)
+    
+    return {
+        "id": workflow_data.get('id', ''),
+        "name": workflow_data.get('name', ''),
+        "description": workflow_data.get('description', ''),
+        "nodes": react_flow_nodes,
+        "edges": react_flow_edges,
+        "viewport": {
+            "x": workflow_data.get('canvas_config', {}).get('pan_x', 0),
+            "y": workflow_data.get('canvas_config', {}).get('pan_y', 0),
+            "zoom": workflow_data.get('canvas_config', {}).get('zoom', 1.0)
+        }
+    }
 
 @bp.route('/api/workflow/<namespace>/<workflow_id>', methods=['PUT'])
 def save_workflow(namespace, workflow_id):
