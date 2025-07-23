@@ -221,12 +221,7 @@ function setupAtCompletion() {
         }
     });
     
-    messageInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
-    });
+    // 移除重复的键盘事件监听器，由 initAutoResizeTextarea 统一处理
 }
 
 // 显示实例建议
