@@ -36,7 +36,10 @@ function sendMessage() {
     // 清空输入框并重置高度
     messageInput.value = '';
     messageInput.style.height = 'auto';
-    messageInput.style.height = '38px'; // 重置为最小高度
+    messageInput.style.height = '36px'; // 更新为新的最小高度
+    
+    // 更新工具栏按钮状态
+    updateToolbarButtonStates();
     
     // 根据是否有@来决定发送方式
     if (mentions.length > 0) {
@@ -701,6 +704,172 @@ function copyImageUrl(imageUrl) {
     });
 }
 
+// 撤销上一条消息
+function undoLastMessage() {
+    const chatMessages = document.getElementById('chatMessages');
+    if (!chatMessages) {
+        showNotification('找不到聊天消息容器', 'error');
+        return;
+    }
+    
+    // 查找最后一条用户消息
+    const messages = chatMessages.querySelectorAll('.message');
+    let lastUserMessage = null;
+    
+    // 从后往前查找最后一条用户消息
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const message = messages[i];
+        if (message.classList.contains('user-message') || 
+            message.querySelector('.message-header')?.textContent?.includes('用户')) {
+            lastUserMessage = message;
+            break;
+        }
+    }
+    
+    if (lastUserMessage) {
+        // 获取消息内容，准备恢复到输入框
+        const messageContent = extractMessageContent(lastUserMessage);
+        
+        // 显示确认对话框
+        if (confirm('确定要撤销这条消息吗？消息内容将恢复到输入框中。')) {
+            // 删除消息
+            lastUserMessage.remove();
+            
+            // 将消息内容恢复到输入框
+            const messageInput = document.getElementById('messageInput');
+            if (messageInput && messageContent) {
+                messageInput.value = messageContent;
+                autoResizeTextarea(messageInput);
+                messageInput.focus();
+                
+                // 将光标移到末尾
+                messageInput.setSelectionRange(messageContent.length, messageContent.length);
+            }
+            
+            showNotification('消息已撤销并恢复到输入框', 'success');
+        }
+    } else {
+        showNotification('没有找到可撤销的用户消息', 'warning');
+    }
+}
+
+// 提取消息内容的辅助函数
+function extractMessageContent(messageElement) {
+    // 尝试多种方式提取消息内容
+    let content = '';
+    
+    // 方式1: 查找消息内容区域
+    const contentArea = messageElement.querySelector('.message-content, .wechat-message-content');
+    if (contentArea) {
+        content = contentArea.textContent || contentArea.innerText;
+    }
+    
+    // 方式2: 如果没找到，尝试直接从消息元素提取
+    if (!content) {
+        const textContent = messageElement.textContent || messageElement.innerText;
+        // 移除时间戳和用户标识
+        content = textContent.replace(/^\d{1,2}:\d{2}:\d{2}\s*/, '') // 移除时间戳
+                            .replace(/^用户[：:]\s*/, '') // 移除"用户:"
+                            .replace(/^[^:：]*[：:]\s*/, '') // 移除其他标识
+                            .trim();
+    }
+    
+    return content;
+}
+
+// ==================== 工具栏管理函数 ====================
+
+// 更新工具栏按钮状态
+function updateToolbarButtonStates() {
+    const messageInput = document.getElementById('messageInput');
+    const chatMessages = document.getElementById('chatMessages');
+    
+    // 更新发送按钮状态
+    const sendButtons = document.querySelectorAll('.toolbar-btn[onclick*="sendMessage"], .send-btn');
+    const hasMessage = messageInput && messageInput.value.trim().length > 0;
+    
+    sendButtons.forEach(btn => {
+        if (hasMessage) {
+            btn.removeAttribute('disabled');
+            btn.style.opacity = '1';
+        } else {
+            btn.setAttribute('disabled', 'true');
+            btn.style.opacity = '0.5';
+        }
+    });
+    
+    // 更新撤销按钮状态
+    const undoButton = document.querySelector('.toolbar-btn[onclick*="undoLastMessage"]');
+    if (undoButton) {
+        const userMessages = chatMessages ? chatMessages.querySelectorAll('.user-message, .message') : [];
+        let hasUserMessages = false;
+        
+        // 检查是否有用户消息
+        for (let msg of userMessages) {
+            const header = msg.querySelector('.message-header');
+            if (header && header.textContent.includes('用户')) {
+                hasUserMessages = true;
+                break;
+            }
+            if (msg.classList.contains('user-message')) {
+                hasUserMessages = true;
+                break;
+            }
+        }
+        
+        if (hasUserMessages) {
+            undoButton.removeAttribute('disabled');
+            undoButton.style.opacity = '1';
+        } else {
+            undoButton.setAttribute('disabled', 'true');
+            undoButton.style.opacity = '0.5';
+        }
+    }
+    
+    // 更新历史按钮状态
+    const historyButton = document.querySelector('.toolbar-btn[onclick*="recallLastMessage"]');
+    if (historyButton) {
+        const hasHistory = messageHistory && messageHistory.length > 0;
+        const inputEmpty = !messageInput || messageInput.value.trim() === '';
+        
+        if (hasHistory && inputEmpty) {
+            historyButton.removeAttribute('disabled');
+            historyButton.style.opacity = '1';
+        } else {
+            historyButton.setAttribute('disabled', 'true');
+            historyButton.style.opacity = '0.5';
+        }
+    }
+    
+    // 更新清空按钮状态
+    const clearButton = document.querySelector('.toolbar-btn[onclick*="clearMessageInput"]');
+    if (clearButton) {
+        if (hasMessage) {
+            clearButton.removeAttribute('disabled');
+            clearButton.style.opacity = '1';
+        } else {
+            clearButton.setAttribute('disabled', 'true');
+            clearButton.style.opacity = '0.5';
+        }
+    }
+}
+
+// 初始化工具栏
+function initToolbar() {
+    const messageInput = document.getElementById('messageInput');
+    if (messageInput) {
+        // 监听输入变化，更新按钮状态
+        messageInput.addEventListener('input', updateToolbarButtonStates);
+        messageInput.addEventListener('keyup', updateToolbarButtonStates);
+        
+        // 初始更新状态
+        updateToolbarButtonStates();
+        
+        // 定期更新状态（处理动态内容变化）
+        setInterval(updateToolbarButtonStates, 2000);
+    }
+}
+
 // ==================== 快捷键功能函数 ====================
 
 // 清空消息输入框 (ESC键)
@@ -709,8 +878,11 @@ function clearMessageInput() {
     if (messageInput) {
         messageInput.value = '';
         messageInput.style.height = 'auto';
-        messageInput.style.height = '38px'; // 重置为最小高度
+        messageInput.style.height = '36px'; // 更新为新的最小高度
         messageInput.focus();
+        
+        // 更新工具栏按钮状态
+        updateToolbarButtonStates();
         
         // 显示提示
         showNotification('输入框已清空', 'info', 1000);

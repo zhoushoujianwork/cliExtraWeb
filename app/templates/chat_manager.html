@@ -110,29 +110,125 @@
 
 .chat-input-area {
     border-top: 1px solid #dee2e6;
-    padding: 15px;
+    padding: 10px 15px 15px 15px;
     background: white;
+}
+
+/* 聊天工具栏样式 */
+.chat-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 4px 0;
+}
+
+.toolbar-left,
+.toolbar-right {
+    display: flex;
+    gap: 4px;
+}
+
+/* 工具栏小图标按钮 */
+.toolbar-btn {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #e0e0e0;
+    background: #f8f9fa;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 12px;
+    color: #666;
+}
+
+.toolbar-btn:hover {
+    background: #e9ecef;
+    border-color: #007bff;
+    color: #007bff;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,123,255,0.2);
+}
+
+.toolbar-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0,123,255,0.3);
+}
+
+.toolbar-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* 输入框包装器 */
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+/* 发送按钮样式 */
+.send-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: #007bff;
+    color: white;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.send-btn:hover {
+    background: #0056b3;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(0,123,255,0.3);
+}
+
+.send-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 3px rgba(0,123,255,0.4);
+}
+
+.send-btn:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
 /* 自适应 textarea 样式 */
 .auto-resize-textarea {
     resize: none;
     overflow: hidden;
-    min-height: 38px;
+    min-height: 36px;
     max-height: 120px;
     line-height: 1.4;
     transition: height 0.1s ease;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 8px 12px;
+    flex: 1;
 }
 
-.chat-input-area .input-group {
-    align-items: flex-end;
+.auto-resize-textarea:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
+    outline: none;
 }
 
-.chat-input-area .btn {
-    height: fit-content;
-    align-self: flex-end;
-    min-height: 38px;
-}
+
 
 .terminal-container {
     flex: 1;
@@ -300,12 +396,35 @@
                 <!-- 聊天消息将通过JavaScript动态加载 -->
             </div>
             <div class="chat-input-area">
-                <div class="input-group">
-                    <textarea id="messageInput" class="form-control auto-resize-textarea" placeholder="输入消息... (Enter发送, Shift+Enter换行, ESC清空, F1帮助)" rows="1"></textarea>
-                    <button class="btn btn-outline-secondary" onclick="showKeyboardShortcuts()" title="快捷键帮助 (F1)">
-                        <i class="fas fa-keyboard"></i>
-                    </button>
-                    <button class="btn btn-primary" onclick="sendMessage()" title="发送消息 (Enter)">
+                <!-- 快捷按钮工具栏 -->
+                <div class="chat-toolbar">
+                    <div class="toolbar-left">
+                        <button class="toolbar-btn" onclick="sendMessage()" title="发送消息 (Enter)">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                        <button class="toolbar-btn" onclick="undoLastMessage()" title="撤销上一条消息">
+                            <i class="fas fa-undo"></i>
+                        </button>
+                        <button class="toolbar-btn" onclick="clearMessageInput()" title="清空输入框 (ESC)">
+                            <i class="fas fa-eraser"></i>
+                        </button>
+                        <button class="toolbar-btn" onclick="recallLastMessage()" title="重新编辑上一条消息 (↑)">
+                            <i class="fas fa-history"></i>
+                        </button>
+                    </div>
+                    <div class="toolbar-right">
+                        <button class="toolbar-btn" onclick="showKeyboardShortcuts()" title="快捷键帮助 (F1)">
+                            <i class="fas fa-keyboard"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 输入框区域 -->
+                <div class="input-wrapper">
+                    <textarea id="messageInput" class="form-control auto-resize-textarea" 
+                             placeholder="输入消息... (Enter发送, Shift+Enter换行)" 
+                             rows="1"></textarea>
+                    <button class="send-btn" onclick="sendMessage()" title="发送 (Enter)">
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
@@ -735,6 +854,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initSocket();
     initTerminal();
     initAutoResizeTextarea();
+    initToolbar(); // 初始化工具栏
     
     // 添加路径类型切换监听器
     const localPathRadio = document.getElementById('localPath');
@@ -1069,6 +1189,131 @@ async function deleteNamespace() {
     } catch (error) {
         console.error('删除 namespace 失败:', error);
         alert(`删除失败: ${error.message}`);
+    }
+}
+
+// 快捷键功能函数
+let lastSentMessage = ''; // 存储上一条发送的消息
+
+// 清空输入框
+function clearMessageInput() {
+    const textarea = document.getElementById('messageInput');
+    if (textarea) {
+        textarea.value = '';
+        textarea.style.height = 'auto';
+        textarea.style.height = '38px'; // 重置为最小高度
+        showNotification('输入框已清空', 'info', 1000);
+    }
+}
+
+// 清空聊天记录
+function clearChatMessages() {
+    if (confirm('确定要清空所有聊天记录吗？')) {
+        const chatMessages = document.getElementById('chatMessages');
+        if (chatMessages) {
+            chatMessages.innerHTML = '';
+            showNotification('聊天记录已清空', 'info', 1500);
+        }
+    }
+}
+
+// 重新编辑上一条消息
+function recallLastMessage() {
+    if (lastSentMessage) {
+        const textarea = document.getElementById('messageInput');
+        if (textarea) {
+            textarea.value = lastSentMessage;
+            textarea.focus();
+            // 触发自适应高度调整
+            textarea.dispatchEvent(new Event('input'));
+            showNotification('已恢复上一条消息', 'info', 1000);
+        }
+    }
+}
+
+// 显示快捷键帮助
+function showKeyboardShortcuts() {
+    const shortcuts = [
+        { key: 'Enter', desc: '发送消息' },
+        { key: 'Shift + Enter', desc: '换行' },
+        { key: 'ESC', desc: '清空输入框' },
+        { key: 'Ctrl + L', desc: '清空聊天记录' },
+        { key: 'Ctrl + K', desc: '聚焦到输入框' },
+        { key: '↑ (空输入框时)', desc: '恢复上一条消息' },
+        { key: 'F1', desc: '显示此帮助' }
+    ];
+    
+    let helpText = '🎯 聊天快捷键帮助\n\n';
+    shortcuts.forEach(shortcut => {
+        helpText += `${shortcut.key.padEnd(20)} - ${shortcut.desc}\n`;
+    });
+    
+    alert(helpText);
+}
+
+// 增强sendMessage函数，记录最后发送的消息
+const originalSendMessage = window.sendMessage;
+if (typeof originalSendMessage === 'function') {
+    window.sendMessage = function() {
+        const textarea = document.getElementById('messageInput');
+        if (textarea && textarea.value.trim()) {
+            lastSentMessage = textarea.value.trim();
+        }
+        return originalSendMessage.apply(this, arguments);
+    };
+}
+
+// 全局键盘事件监听（用于处理F1等全局快捷键）
+document.addEventListener('keydown', function(e) {
+    // F1 显示帮助
+    if (e.key === 'F1') {
+        e.preventDefault();
+        showKeyboardShortcuts();
+    }
+    // Ctrl+K 聚焦到输入框（全局）
+    else if (e.ctrlKey && e.key === 'k') {
+        e.preventDefault();
+        const textarea = document.getElementById('messageInput');
+        if (textarea) {
+            textarea.focus();
+            showNotification('已聚焦到输入框', 'info', 800);
+        }
+    }
+});
+
+// 显示通知函数（如果不存在的话）
+if (typeof showNotification !== 'function') {
+    function showNotification(message, type = 'info', duration = 3000) {
+        // 创建通知元素
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type} notification-toast`;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            min-width: 250px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        `;
+        notification.textContent = message;
+        
+        document.body.appendChild(notification);
+        
+        // 显示动画
+        setTimeout(() => {
+            notification.style.opacity = '1';
+        }, 10);
+        
+        // 自动隐藏
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, duration);
     }
 }
 </script>
