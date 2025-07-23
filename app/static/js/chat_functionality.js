@@ -368,7 +368,7 @@ async function refreshChatCache() {
     addSystemMessage('正在刷新聊天记录缓存...');
     
     try {
-        const currentNs = getCurrentNamespace() || 'q_cli';
+        const currentNs = getCurrentNamespace() || 'default';
         console.log('当前namespace:', currentNs);
         
         // 调用刷新缓存API
@@ -485,7 +485,10 @@ document.addEventListener('DOMContentLoaded', function() {
 // 页面加载时自动加载聊天历史
 async function loadChatHistoryOnInit() {
     try {
-        const currentNs = getCurrentNamespace() || 'q_cli';
+        // 等待namespace初始化完成
+        await waitForNamespaceInit();
+        
+        const currentNs = getCurrentNamespace() || 'default';
         console.log('初始化加载聊天历史，namespace:', currentNs);
         
         // 调用获取聊天历史API
@@ -497,12 +500,43 @@ async function loadChatHistoryOnInit() {
             loadHistoryToChat(result.history);
         } else {
             console.log('初始化时无历史记录或加载失败');
-            addSystemMessage('欢迎使用聊天功能！');
+            addSystemMessage(`欢迎使用 ${currentNs} 聊天功能！`);
         }
     } catch (error) {
         console.error('初始化加载聊天历史失败:', error);
-        addSystemMessage('欢迎使用聊天功能！');
+        const currentNs = getCurrentNamespace() || 'default';
+        addSystemMessage(`欢迎使用 ${currentNs} 聊天功能！`);
     }
+}
+
+// 等待namespace初始化完成
+function waitForNamespaceInit() {
+    return new Promise((resolve) => {
+        // 如果namespace已经初始化，直接返回
+        if (typeof getCurrentNamespace === 'function' && getCurrentNamespace()) {
+            resolve();
+            return;
+        }
+        
+        // 等待namespace初始化
+        let attempts = 0;
+        const maxAttempts = 20; // 最多等待2秒
+        
+        const checkNamespace = () => {
+            attempts++;
+            
+            if (typeof getCurrentNamespace === 'function' && getCurrentNamespace()) {
+                resolve();
+            } else if (attempts < maxAttempts) {
+                setTimeout(checkNamespace, 100);
+            } else {
+                console.warn('Namespace初始化超时，使用默认值');
+                resolve();
+            }
+        };
+        
+        setTimeout(checkNamespace, 100);
+    });
 }
 
 // 根据实例ID生成头像

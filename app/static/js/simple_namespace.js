@@ -101,18 +101,87 @@ function switchNamespace() {
     
     const newNamespace = select.value;
     if (newNamespace !== currentNamespace) {
+        const oldNamespace = currentNamespace;
         currentNamespace = newNamespace;
         window.currentNamespace = currentNamespace; // 同步到全局作用域
         storeNamespace(currentNamespace);
         
-        console.log('切换到namespace:', currentNamespace || '全部');
+        console.log('切换namespace:', oldNamespace, '->', currentNamespace || '全部');
         
         // 重新加载实例列表
         loadInstancesWithNamespace();
         
+        // 重新加载聊天记录
+        reloadChatHistoryForNamespace(currentNamespace);
+        
         // 停止当前监控
         if (typeof stopMonitoring === 'function') {
             stopMonitoring();
+        }
+    }
+}
+
+/**
+ * 为指定namespace重新加载聊天记录
+ */
+async function reloadChatHistoryForNamespace(namespace) {
+    try {
+        console.log('重新加载聊天记录，namespace:', namespace);
+        
+        // 清空当前聊天区域
+        const chatMessages = document.getElementById('chatMessages');
+        if (chatMessages) {
+            chatMessages.innerHTML = '';
+        }
+        
+        // 显示加载提示
+        if (typeof addSystemMessage === 'function') {
+            addSystemMessage(`正在加载 ${namespace || 'default'} 的聊天记录...`);
+        }
+        
+        // 调用获取聊天历史API
+        const response = await fetch(`/api/chat/history?limit=50&namespace=${namespace || 'default'}`);
+        const result = await response.json();
+        
+        if (result.success && result.history && result.history.length > 0) {
+            console.log('加载聊天记录成功，数量:', result.history.length);
+            
+            // 清空加载提示
+            if (chatMessages) {
+                chatMessages.innerHTML = '';
+            }
+            
+            // 加载历史记录到聊天界面
+            if (typeof loadHistoryToChat === 'function') {
+                loadHistoryToChat(result.history);
+            }
+            
+            if (typeof addSystemMessage === 'function') {
+                addSystemMessage(`已加载 ${result.history.length} 条历史消息`);
+            }
+        } else {
+            console.log('无聊天记录或加载失败');
+            
+            // 清空加载提示
+            if (chatMessages) {
+                chatMessages.innerHTML = '';
+            }
+            
+            if (typeof addSystemMessage === 'function') {
+                addSystemMessage(`欢迎使用 ${namespace || 'default'} 聊天功能！`);
+            }
+        }
+    } catch (error) {
+        console.error('重新加载聊天记录失败:', error);
+        
+        // 清空加载提示
+        const chatMessages = document.getElementById('chatMessages');
+        if (chatMessages) {
+            chatMessages.innerHTML = '';
+        }
+        
+        if (typeof addSystemMessage === 'function') {
+            addSystemMessage(`加载聊天记录失败: ${error.message}`);
         }
     }
 }
