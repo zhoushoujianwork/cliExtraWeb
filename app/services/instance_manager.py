@@ -758,84 +758,76 @@ class InstanceManager:
                                    tools: Optional[List[str]] = None) -> Dict[str, any]:
         """创建带配置的cliExtra实例"""
         try:
-            def create_worker():
-                with self._start_lock:
-                    try:
-                        # 构建cliExtra start命令
-                        cmd = ['cliExtra', 'start']
-                        
-                        # 添加路径参数（如果指定）
-                        if path:
-                            cmd.append(path)
-                        
-                        # 添加名称参数（如果指定）
-                        if name:
-                            cmd.extend(['--name', name])
-                        
-                        # 添加namespace参数（如果指定）
-                        if namespace:
-                            cmd.extend(['--ns', namespace])
-                        
-                        # 添加角色参数（如果指定）
-                        if role:
-                            cmd.extend(['--role', role])
-                        
-                        # 添加工具参数（如果指定）
-                        if tools and isinstance(tools, list):
-                            for tool in tools:
-                                cmd.extend(['--tool', tool])
-                        
-                        logger.info(f'启动cliExtra实例，命令: {" ".join(cmd)}')
-                        
-                        # 启动实例
-                        result = subprocess.run(
-                            cmd,
-                            capture_output=True, text=True, timeout=30
-                        )
-                        
-                        if result.returncode != 0:
-                            logger.error(f'启动cliExtra实例失败: {result.stderr}')
-                            return
-                        
-                        logger.info(f'cliExtra实例启动成功: {result.stdout}')
-                        
-                        # 等待实例启动
-                        time.sleep(2)
-                        
-                        # 如果指定了角色但没有在命令行中应用，单独应用角色配置
-                        if role and '--role' not in cmd:
-                            self._apply_role_to_instance(name, role)
-                        
-                        # 同步实例状态
-                        self.sync_screen_instances()
-                        
-                    except subprocess.TimeoutExpired:
-                        logger.error(f'启动cliExtra实例超时（30秒）')
-                    except Exception as e:
-                        logger.error(f'后台创建cliExtra实例失败: {str(e)}')
-            
-            # 在后台线程中创建实例
-            thread = threading.Thread(target=create_worker, daemon=True)
-            thread.start()
-            
-            # 构建返回消息
-            instance_desc = []
-            if name:
-                instance_desc.append(f"名称: {name}")
-            if path:
-                instance_desc.append(f"路径: {path}")
-            if role:
-                instance_desc.append(f"角色: {role}")
-            
-            desc_str = f" ({', '.join(instance_desc)})" if instance_desc else ""
-            message = f'cliExtra实例{desc_str}正在后台创建...'
-            
-            return {
-                'success': True, 
-                'message': message,
-                'instance_id': name if name else 'auto-generated'
-            }
+            with self._start_lock:
+                # 构建cliExtra start命令
+                cmd = ['cliExtra', 'start']
                 
+                # 添加路径参数（如果指定）
+                if path:
+                    cmd.append(path)
+                
+                # 添加名称参数（如果指定）
+                if name:
+                    cmd.extend(['--name', name])
+                
+                # 添加namespace参数（如果指定）
+                if namespace:
+                    cmd.extend(['--ns', namespace])
+                
+                # 添加角色参数（如果指定）
+                if role:
+                    cmd.extend(['--role', role])
+                
+                # 添加工具参数（如果指定）
+                if tools and isinstance(tools, list):
+                    for tool in tools:
+                        cmd.extend(['--tool', tool])
+                
+                logger.info(f'启动cliExtra实例，命令: {" ".join(cmd)}')
+                
+                # 同步启动实例
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True, text=True, timeout=60
+                )
+                
+                if result.returncode != 0:
+                    error_msg = f'启动cliExtra实例失败: {result.stderr}'
+                    logger.error(error_msg)
+                    return {'success': False, 'error': error_msg}
+                
+                logger.info(f'cliExtra实例启动成功: {result.stdout}')
+                
+                # 等待实例完全启动
+                time.sleep(3)
+                
+                # 同步实例状态
+                self.sync_screen_instances()
+                
+                # 构建返回消息
+                instance_desc = []
+                if name:
+                    instance_desc.append(f"名称: {name}")
+                if path:
+                    instance_desc.append(f"路径: {path}")
+                if role:
+                    instance_desc.append(f"角色: {role}")
+                if namespace:
+                    instance_desc.append(f"namespace: {namespace}")
+                
+                desc_str = f" ({', '.join(instance_desc)})" if instance_desc else ""
+                message = f'cliExtra实例{desc_str}创建成功'
+                
+                return {
+                    'success': True, 
+                    'message': message,
+                    'instance_id': name if name else 'auto-generated'
+                }
+                
+        except subprocess.TimeoutExpired:
+            error_msg = '创建实例超时（60秒）'
+            logger.error(error_msg)
+            return {'success': False, 'error': error_msg}
         except Exception as e:
             logger.error(f'创建配置实例失败: {str(e)}')
             return {'success': False, 'error': str(e)}
