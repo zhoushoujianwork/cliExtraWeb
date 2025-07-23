@@ -158,11 +158,16 @@ function updateInstancesList(instances) {
     instances.forEach(instance => {
         const instanceDiv = document.createElement('div');
         instanceDiv.className = 'instance-item mb-2 p-2 border rounded';
+        
+        // 根据状态设置不同的样式
+        const statusClass = instance.status === 'Attached' ? 'success' : 
+                           instance.status === 'Detached' ? 'warning' : 'secondary';
+        
         instanceDiv.innerHTML = `
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <strong>${instance.id}</strong>
-                    <span class="badge bg-${instance.status === 'Attached' ? 'success' : 'warning'} ms-2">
+                    <span class="badge bg-${statusClass} ms-2">
                         ${instance.status}
                     </span>
                     ${instance.namespace ? '<br><small class="text-muted">ns: ' + instance.namespace + '</small>' : ''}
@@ -171,8 +176,11 @@ function updateInstancesList(instances) {
                     <button class="btn btn-outline-primary" onclick="startMonitoringWithMemory('${instance.id}')" title="监控输出">
                         <i class="fas fa-eye"></i>
                     </button>
-                    <button class="btn btn-outline-danger" onclick="stopInstance('${instance.id}')" title="停止实例">
+                    <button class="btn btn-outline-warning" onclick="stopInstance('${instance.id}')" title="停止实例" ${instance.status === 'Detached' ? 'disabled' : ''}>
                         <i class="fas fa-stop"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="cleanInstance('${instance.id}')" title="清理实例数据">
+                        <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </div>

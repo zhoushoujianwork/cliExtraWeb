@@ -316,6 +316,9 @@
 <!-- 简化的实例操作 -->
 <script src="{{ url_for('static', filename='js/simple_instance_ops.js') }}"></script>
 
+<!-- 完整的实例操作功能 -->
+<script src="{{ url_for('static', filename='js/instance_operations.js') }}"></script>
+
 <!-- 简化的namespace管理 -->
 <script src="{{ url_for('static', filename='js/simple_namespace.js') }}"></script>
 
@@ -490,16 +493,41 @@ function loadInstances() {
 // 停止实例
 function stopInstance(instanceId) {
     if (confirm(`确定要停止实例 ${instanceId} 吗？`)) {
-        fetch(`/api/instances/${instanceId}/stop`, {method: 'POST'})
+        // 显示加载状态
+        const button = event.target.closest('button');
+        if (button) {
+            const originalContent = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            button.disabled = true;
+        }
+        
+        fetch(`/api/stop/${instanceId}`, {method: 'POST'})
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    showNotification(`实例 ${instanceId} 已停止`, 'success');
                     loadInstances();
                     if (currentMonitoringInstance === instanceId) {
                         stopMonitoring();
                     }
                 } else {
-                    alert('停止实例失败: ' + data.error);
+                    showNotification(`停止实例失败: ${data.error}`, 'error');
+                }
+                
+                // 恢复按钮状态
+                if (button) {
+                    button.innerHTML = '<i class="fas fa-stop"></i>';
+                    button.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error('停止实例失败:', error);
+                showNotification(`停止实例失败: ${error.message}`, 'error');
+                
+                // 恢复按钮状态
+                if (button) {
+                    button.innerHTML = '<i class="fas fa-stop"></i>';
+                    button.disabled = false;
                 }
             });
     }
