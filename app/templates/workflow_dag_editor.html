@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow DAG 编辑器</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- React Flow CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.10.1/dist/style.css">
+    
+    <style>
+        .dag-editor-container {
+            height: calc(100vh - 120px);
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            position: relative;
+        }
+        
+        .node-panel {
+            width: 250px;
+            background: #f8f9fa;
+            border-right: 1px solid #e5e7eb;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        
+        .node-template {
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            cursor: grab;
+            background: white;
+            transition: all 0.2s;
+        }
+        
+        .node-template:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .node-template:active {
+            cursor: grabbing;
+        }
+        
+        .canvas-area {
+            flex: 1;
+            position: relative;
+        }
+        
+        .toolbar {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            gap: 5px;
+        }
+        
+        .react-flow__node {
+            border-radius: 8px;
+            border: 2px solid;
+            padding: 10px;
+            min-width: 150px;
+            text-align: center;
+            font-size: 12px;
+        }
+        
+        .react-flow__node-start {
+            background: #10b981;
+            border-color: #059669;
+            color: white;
+        }
+        
+        .react-flow__node-end {
+            background: #ef4444;
+            border-color: #dc2626;
+            color: white;
+        }
+        
+        .react-flow__node-task {
+            background: #3b82f6;
+            border-color: #2563eb;
+            color: white;
+        }
+        
+        .react-flow__node-decision {
+            background: #f59e0b;
+            border-color: #d97706;
+            color: white;
+        }
+        
+        .react-flow__handle {
+            width: 8px;
+            height: 8px;
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-project-diagram"></i> Workflow DAG 编辑器
+            </a>
+            <div class="navbar-nav ms-auto">
+                <button class="btn btn-outline-light btn-sm me-2" onclick="saveWorkflow()">
+                    <i class="fas fa-save"></i> 保存
+                </button>
+                <a class="nav-link" href="{{ url_for('main.index') }}">
+                    <i class="fas fa-home"></i> 返回
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-3">
+        <div class="row">
+            <div class="col-12">
+                <div class="dag-editor-container d-flex">
+                    <!-- 节点面板 -->
+                    <div class="node-panel">
+                        <h6 class="mb-3">
+                            <i class="fas fa-puzzle-piece"></i> 节点模板
+                        </h6>
+                        <div id="nodeTemplates">
+                            <!-- 节点模板将通过 JavaScript 动态加载 -->
+                        </div>
+                    </div>
+                    
+                    <!-- 画布区域 -->
+                    <div class="canvas-area">
+                        <div class="toolbar">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="zoomIn()">
+                                <i class="fas fa-search-plus"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="zoomOut()">
+                                <i class="fas fa-search-minus"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="fitView()">
+                                <i class="fas fa-expand-arrows-alt"></i>
+                            </button>
+                        </div>
+                        <div id="reactflow-wrapper" style="width: 100%; height: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- React 和 React Flow -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/reactflow@11.10.1/dist/umd/index.js"></script>
+    
+    <script>
+        const { useState, useCallback, useRef, useEffect } = React;
+        const { 
+            ReactFlow, 
+            Controls, 
+            Background, 
+            useNodesState, 
+            useEdgesState, 
+            addEdge,
+            Handle,
+            Position
+        } = ReactFlowLib;
+
+        // 自定义节点组件
+        const CustomNode = ({ data, type }) => {
+            return React.createElement('div', {
+                style: {
+                    padding: '10px',
+                    borderRadius: '8px',
+                    border: '2px solid',
+                    minWidth: '150px',
+                    textAlign: 'center',
+                    fontSize: '12px',
+                    backgroundColor: data.style?.backgroundColor || '#ffffff',
+                    borderColor: data.style?.borderColor || '#d1d5db',
+                    color: data.style?.color || '#000000'
+                }
+            }, [
+                React.createElement(Handle, {
+                    key: 'target',
+                    type: 'target',
+                    position: Position.Left,
+                    style: { background: '#555' }
+                }),
+                React.createElement('div', { key: 'label' }, data.label),
+                React.createElement(Handle, {
+                    key: 'source', 
+                    type: 'source',
+                    position: Position.Right,
+                    style: { background: '#555' }
+                })
+            ]);
+        };
+
+        // 节点类型映射
+        const nodeTypes = {
+            start: CustomNode,
+            end: CustomNode,
+            task: CustomNode,
+            decision: CustomNode
+        };
+
+        // 主要的 Flow 组件
+        const DagFlow = () => {
+            const [nodes, setNodes, onNodesChange] = useNodesState([]);
+            const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+            const [reactFlowInstance, setReactFlowInstance] = useState(null);
+            const reactFlowWrapper = useRef(null);
+
+            // 连接处理
+            const onConnect = useCallback((params) => {
+                setEdges((eds) => addEdge(params, eds));
+            }, [setEdges]);
+
+            // 拖拽处理
+            const onDragOver = useCallback((event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+            }, []);
+
+            const onDrop = useCallback((event) => {
+                event.preventDefault();
+
+                const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
+                const type = event.dataTransfer.getData('application/reactflow');
+
+                if (typeof type === 'undefined' || !type) {
+                    return;
+                }
+
+                const position = reactFlowInstance.project({
+                    x: event.clientX - reactFlowBounds.left,
+                    y: event.clientY - reactFlowBounds.top,
+                });
+
+                const newNode = {
+                    id: `${type}-${Date.now()}`,
+                    type,
+                    position,
+                    data: { 
+                        label: `${type} 节点`,
+                        style: getNodeStyle(type)
+                    },
+                };
+
+                setNodes((nds) => nds.concat(newNode));
+            }, [reactFlowInstance, setNodes]);
+
+            // 获取节点样式
+            const getNodeStyle = (type) => {
+                const styles = {
+                    start: { backgroundColor: '#10b981', borderColor: '#059669', color: '#ffffff' },
+                    end: { backgroundColor: '#ef4444', borderColor: '#dc2626', color: '#ffffff' },
+                    task: { backgroundColor: '#3b82f6', borderColor: '#2563eb', color: '#ffffff' },
+                    decision: { backgroundColor: '#f59e0b', borderColor: '#d97706', color: '#ffffff' }
+                };
+                return styles[type] || styles.task;
+            };
+
+            // 加载工作流数据
+            useEffect(() => {
+                loadWorkflow();
+            }, []);
+
+            // 全局保存函数
+            window.saveWorkflow = () => {
+                const workflowData = {
+                    nodes: nodes,
+                    edges: edges
+                };
+                
+                fetch('/api/workflow/default/test-workflow', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(workflowData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('工作流保存成功！');
+                    } else {
+                        alert('保存失败: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('保存失败:', error);
+                    alert('保存失败: ' + error.message);
+                });
+            };
+
+            // 工具栏函数
+            window.zoomIn = () => reactFlowInstance?.zoomIn();
+            window.zoomOut = () => reactFlowInstance?.zoomOut();
+            window.fitView = () => reactFlowInstance?.fitView();
+
+            return React.createElement(ReactFlow, {
+                ref: reactFlowWrapper,
+                nodes,
+                edges,
+                onNodesChange,
+                onEdgesChange,
+                onConnect,
+                onInit: setReactFlowInstance,
+                onDrop,
+                onDragOver,
+                nodeTypes,
+                fitView: true
+            }, [
+                React.createElement(Controls),
+                React.createElement(Background, { variant: 'dots', gap: 12, size: 1 })
+            ]);
+        };
+
+        // 加载工作流数据
+        async function loadWorkflow() {
+            try {
+                const response = await fetch('/api/workflow/default/test-workflow');
+                const data = await response.json();
+                
+                if (data.success && data.workflow) {
+                    // 这里需要设置节点和边，但由于 React 状态管理的限制，
+                    // 我们先用简单的方式处理
+                    console.log('加载的工作流数据:', data.workflow);
+                }
+            } catch (error) {
+                console.error('加载工作流失败:', error);
+            }
+        }
+
+        // 加载节点模板
+        async function loadNodeTemplates() {
+            try {
+                const response = await fetch('/api/workflow/templates');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const container = document.getElementById('nodeTemplates');
+                    container.innerHTML = '';
+                    
+                    Object.entries(data.templates).forEach(([key, template]) => {
+                        const div = document.createElement('div');
+                        div.className = 'node-template';
+                        div.draggable = true;
+                        div.innerHTML = `
+                            <div style="color: ${template.style.backgroundColor};">
+                                <i class="fas fa-circle"></i> ${template.name}
+                            </div>
+                            <small class="text-muted">${template.description}</small>
+                        `;
+                        
+                        div.addEventListener('dragstart', (event) => {
+                            event.dataTransfer.setData('application/reactflow', key);
+                            event.dataTransfer.effectAllowed = 'move';
+                        });
+                        
+                        container.appendChild(div);
+                    });
+                }
+            } catch (error) {
+                console.error('加载节点模板失败:', error);
+            }
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            // 渲染 React Flow
+            const root = ReactDOM.createRoot(document.getElementById('reactflow-wrapper'));
+            root.render(React.createElement(DagFlow));
+            
+            // 加载节点模板
+            loadNodeTemplates();
+        });
+    </script>
+</body>
+</html>

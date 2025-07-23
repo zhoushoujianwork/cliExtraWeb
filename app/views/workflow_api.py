@@ -1,198 +1,165 @@
 """
-Workflow API 接口
-提供 namespace workflow 管理的 Web API
+Workflow DAG API 接口
+提供拖拽式工作流编辑器的后端支持
 """
 
-from flask import Blueprint, jsonify, request
-import subprocess
-import json
-import yaml
+from flask import Blueprint, request, jsonify
 import logging
+import json
 
 logger = logging.getLogger(__name__)
+
 bp = Blueprint('workflow_api', __name__, url_prefix='/api/workflow')
 
-@bp.route('/<namespace>', methods=['GET'])
-def get_workflow(namespace):
-    """获取指定 namespace 的 workflow 配置"""
-    try:
-        # 调用 qq workflow show 命令
-        result = subprocess.run(
-            ['qq', 'workflow', 'show', namespace],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        if result.returncode != 0:
-            logger.error(f"获取 workflow 失败: {result.stderr}")
-            return jsonify({
-                'success': False,
-                'error': f'获取 workflow 失败: {result.stderr.strip()}'
-            }), 500
-        
-        # 解析 YAML 输出
-        try:
-            # 移除标题行，只保留 YAML 内容
-            yaml_content = result.stdout
-            if yaml_content.startswith('=== Namespace:'):
-                lines = yaml_content.split('\n')
-                yaml_start = 1
-                for i, line in enumerate(lines):
-                    if line.strip() and not line.startswith('==='):
-                        yaml_start = i
-                        break
-                yaml_content = '\n'.join(lines[yaml_start:])
-            
-            workflow_data = yaml.safe_load(yaml_content)
-            
-            return jsonify({
-                'success': True,
-                'namespace': namespace,
-                'workflow': workflow_data
-            })
-            
-        except yaml.YAMLError as e:
-            logger.error(f"解析 workflow YAML 失败: {str(e)}")
-            return jsonify({
-                'success': False,
-                'error': f'解析 workflow 配置失败: {str(e)}'
-            }), 500
-            
-    except subprocess.TimeoutExpired:
-        logger.error("获取 workflow 超时")
-        return jsonify({
-            'success': False,
-            'error': '获取 workflow 超时'
-        }), 500
-    except Exception as e:
-        logger.error(f"获取 workflow 异常: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': f'获取 workflow 异常: {str(e)}'
-        }), 500
+@bp.route('/templates', methods=['GET'])
+def get_node_templates():
+    """获取节点模板"""
+    templates = {
+        "start": {
+            "type": "start",
+            "name": "开始",
+            "description": "工作流开始节点",
+            "style": {
+                "backgroundColor": "#10b981",
+                "borderColor": "#059669",
+                "color": "#ffffff"
+            }
+        },
+        "end": {
+            "type": "end", 
+            "name": "结束",
+            "description": "工作流结束节点",
+            "style": {
+                "backgroundColor": "#ef4444",
+                "borderColor": "#dc2626", 
+                "color": "#ffffff"
+            }
+        },
+        "task": {
+            "type": "task",
+            "name": "任务节点",
+            "description": "执行具体任务",
+            "style": {
+                "backgroundColor": "#3b82f6",
+                "borderColor": "#2563eb",
+                "color": "#ffffff"
+            }
+        },
+        "decision": {
+            "type": "decision",
+            "name": "决策节点", 
+            "description": "根据条件进行决策",
+            "style": {
+                "backgroundColor": "#f59e0b",
+                "borderColor": "#d97706",
+                "color": "#ffffff"
+            }
+        }
+    }
+    
+    return jsonify({
+        'success': True,
+        'templates': templates
+    })
 
-@bp.route('/list', methods=['GET'])
-def list_workflows():
-    """获取所有可用的 workflow"""
+@bp.route('/<namespace>/<workflow_id>', methods=['GET'])
+def get_workflow(namespace, workflow_id):
+    """获取工作流数据"""
     try:
-        # 使用新的 workflow list 命令
-        result = subprocess.run(
-            ['qq', 'workflow', 'list'],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        if result.returncode != 0:
-            logger.error(f"获取 workflow 列表失败: {result.stderr}")
-            return jsonify({
-                'success': False,
-                'error': f'获取列表失败: {result.stderr.strip()}'
-            }), 500
-        
-        # 解析输出
-        workflows = []
-        lines = result.stdout.strip().split('\n')
-        
-        for line in lines:
-            line = line.strip()
-            if line.startswith('✅') or line.startswith('❌'):
-                # 解析格式：✅ q_cli - workflow.yaml exists
-                parts = line.split(' - ')
-                if len(parts) >= 2:
-                    status_and_name = parts[0].strip()
-                    description = parts[1].strip()
-                    
-                    # 提取 namespace 名称
-                    namespace = status_and_name[2:].strip()  # 去掉 ✅ 或 ❌
-                    has_workflow = line.startswith('✅')
-                    
-                    # 获取实例数量（如果需要的话）
-                    instance_count = 0
-                    try:
-                        from app.services.instance_manager import InstanceManager
-                        manager = InstanceManager()
-                        instances = manager.get_instances_by_namespace(namespace)
-                        instance_count = len(instances)
-                    except:
-                        pass
-                    
-                    workflows.append({
-                        'namespace': namespace,
-                        'has_workflow': has_workflow,
-                        'description': description,
-                        'instance_count': instance_count
-                    })
+        # 临时返回示例数据，后续连接真实服务
+        sample_workflow = {
+            "id": workflow_id,
+            "name": "示例工作流",
+            "description": "这是一个示例工作流",
+            "nodes": [
+                {
+                    "id": "start-1",
+                    "type": "start",
+                    "data": {
+                        "label": "开始",
+                        "description": "工作流开始"
+                    },
+                    "position": {"x": 100, "y": 100},
+                    "style": {
+                        "backgroundColor": "#10b981",
+                        "color": "#ffffff"
+                    }
+                },
+                {
+                    "id": "task-1", 
+                    "type": "task",
+                    "data": {
+                        "label": "需求分析",
+                        "description": "分析用户需求和技术可行性",
+                        "owner": "any"
+                    },
+                    "position": {"x": 300, "y": 100},
+                    "style": {
+                        "backgroundColor": "#3b82f6",
+                        "color": "#ffffff"
+                    }
+                },
+                {
+                    "id": "end-1",
+                    "type": "end",
+                    "data": {
+                        "label": "结束", 
+                        "description": "工作流结束"
+                    },
+                    "position": {"x": 500, "y": 100},
+                    "style": {
+                        "backgroundColor": "#ef4444",
+                        "color": "#ffffff"
+                    }
+                }
+            ],
+            "edges": [
+                {
+                    "id": "edge-1",
+                    "source": "start-1",
+                    "target": "task-1",
+                    "type": "smoothstep"
+                },
+                {
+                    "id": "edge-2", 
+                    "source": "task-1",
+                    "target": "end-1",
+                    "type": "smoothstep"
+                }
+            ]
+        }
         
         return jsonify({
             'success': True,
-            'workflows': workflows
+            'workflow': sample_workflow
         })
         
     except Exception as e:
-        logger.error(f"获取 workflow 列表异常: {str(e)}")
+        logger.error(f"获取工作流失败: {e}")
         return jsonify({
             'success': False,
-            'error': f'获取列表异常: {str(e)}'
+            'error': str(e)
         }), 500
 
-@bp.route('/info', methods=['GET'])
-def get_workflow_info():
-    """获取 workflow 系统信息"""
+@bp.route('/<namespace>/<workflow_id>', methods=['PUT'])
+def save_workflow(namespace, workflow_id):
+    """保存工作流"""
     try:
-        result = subprocess.run(
-            ['qq', 'workflow', 'info'],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        data = request.get_json()
         
-        if result.returncode != 0:
-            logger.error(f"获取 workflow 信息失败: {result.stderr}")
-            return jsonify({
-                'success': False,
-                'error': f'获取信息失败: {result.stderr.strip()}'
-            }), 500
+        # 临时只记录日志，后续实现真实保存
+        logger.info(f"保存工作流 {namespace}/{workflow_id}")
+        logger.info(f"节点数量: {len(data.get('nodes', []))}")
+        logger.info(f"连线数量: {len(data.get('edges', []))}")
         
         return jsonify({
             'success': True,
-            'info': result.stdout
+            'message': '工作流保存成功'
         })
         
     except Exception as e:
-        logger.error(f"获取 workflow 信息异常: {str(e)}")
+        logger.error(f"保存工作流失败: {e}")
         return jsonify({
             'success': False,
-            'error': f'获取信息异常: {str(e)}'
-        }), 500
-
-@bp.route('/help', methods=['GET'])
-def get_workflow_help():
-    """获取 workflow 帮助信息"""
-    try:
-        result = subprocess.run(
-            ['qq', 'workflow', 'help'],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        if result.returncode != 0:
-            logger.error(f"获取 workflow 帮助失败: {result.stderr}")
-            return jsonify({
-                'success': False,
-                'error': f'获取帮助信息失败: {result.stderr.strip()}'
-            }), 500
-        
-        return jsonify({
-            'success': True,
-            'help': result.stdout
-        })
-        
-    except Exception as e:
-        logger.error(f"获取 workflow 帮助异常: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': f'获取帮助信息异常: {str(e)}'
+            'error': str(e)
         }), 500

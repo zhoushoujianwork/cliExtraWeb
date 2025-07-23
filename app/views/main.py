@@ -28,6 +28,11 @@ def workflow_manager():
     """Workflow 管理页面"""
     return render_template('workflow_manager.html')
 
+@bp.route('/workflow/dag-editor')
+def workflow_dag_editor():
+    """Workflow DAG 编辑器页面"""
+    return render_template('workflow_dag_editor.html')
+
 @bp.route('/health')
 def health():
     """健康检查"""
