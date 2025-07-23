@@ -88,16 +88,16 @@ def start_tail_process(instance_id, log_file):
                 'data': '\x1b[32mStarting to monitor log file: {}\x1b[0m\r\n'.format(log_file)
             })
             
-            # 使用tail -f命令持续监听日志文件
-            cmd = ['tail', '-f', log_file]
+            # 使用tail -f命令持续监听日志文件，添加参数确保正确处理
+            cmd = ['tail', '-f', '-n', '50', log_file]  # 先显示最后50行
             
             # 启动tail进程
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                universal_newlines=True,
-                bufsize=1
+                universal_newlines=False,  # 使用二进制模式
+                bufsize=0  # 无缓冲
             )
             
             # 存储进程引用
@@ -106,12 +106,37 @@ def start_tail_process(instance_id, log_file):
             # 读取输出
             while instance_id in active_tail_processes and process.poll() is None:
                 try:
-                    line = process.stdout.readline()
-                    if line:
-                        socketio.emit('terminal_output', {
-                            'instance_id': instance_id,
-                            'data': line
-                        })
+                    # 读取原始字节数据
+                    data = process.stdout.read(1024)
+                    if data:
+                        try:
+                            # 尝试UTF-8解码
+                            text = data.decode('utf-8', errors='replace')
+                            # 确保每行都有正确的换行符
+                            if text and not text.endswith('\n'):
+                                text = text.replace('\n', '\r\n')
+                            else:
+                                text = text.replace('\n', '\r\n')
+                            
+                            socketio.emit('terminal_output', {
+                                'instance_id': instance_id,
+                                'data': text
+                            })
+                        except UnicodeDecodeError:
+                            # 如果UTF-8解码失败，尝试其他编码
+                            try:
+                                text = data.decode('gbk', errors='replace')
+                                text = text.replace('\n', '\r\n')
+                                socketio.emit('terminal_output', {
+                                    'instance_id': instance_id,
+                                    'data': text
+                                })
+                            except:
+                                # 最后的备用方案
+                                socketio.emit('terminal_output', {
+                                    'instance_id': instance_id,
+                                    'data': '[Binary data]\r\n'
+                                })
                     else:
                         time.sleep(0.1)
                         

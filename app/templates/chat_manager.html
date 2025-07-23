@@ -210,11 +210,8 @@ function initSocket() {
         if (term && data.instance_id === currentMonitoringInstance) {
             // 处理输出数据，确保正确显示
             let output = data.data;
-            if (typeof output === 'string') {
-                // 如果没有换行符，添加回车换行
-                if (!output.endsWith('\n') && !output.endsWith('\r\n')) {
-                    output += '\r\n';
-                }
+            if (typeof output === 'string' && output.length > 0) {
+                // 直接写入终端，xterm.js会处理ANSI序列
                 term.write(output);
             }
         }
@@ -242,11 +239,34 @@ function initTerminal() {
             background: '#000000',
             foreground: '#ffffff',
             cursor: '#ffffff',
-            selection: '#ffffff'
+            selection: '#ffffff',
+            black: '#000000',
+            red: '#cd0000',
+            green: '#00cd00',
+            yellow: '#cdcd00',
+            blue: '#0000ee',
+            magenta: '#cd00cd',
+            cyan: '#00cdcd',
+            white: '#e5e5e5',
+            brightBlack: '#7f7f7f',
+            brightRed: '#ff0000',
+            brightGreen: '#00ff00',
+            brightYellow: '#ffff00',
+            brightBlue: '#5c5cff',
+            brightMagenta: '#ff00ff',
+            brightCyan: '#00ffff',
+            brightWhite: '#ffffff'
         },
-        fontSize: 12,
-        fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-        cursorBlink: true
+        fontSize: 13,
+        fontFamily: 'Monaco, Menlo, "Ubuntu Mono", "Courier New", monospace',
+        cursorBlink: true,
+        cursorStyle: 'block',
+        scrollback: 10000,
+        tabStopWidth: 4,
+        convertEol: true,  // 自动转换换行符
+        allowTransparency: false,
+        bellSound: null,
+        bellStyle: 'none'
     });
     
     fitAddon = new FitAddon.FitAddon();
