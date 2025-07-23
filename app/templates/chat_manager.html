@@ -890,6 +890,13 @@ function initSocket() {
             term.clear();
             term.write('\r\n\x1b[32m已连接到交互终端: ' + data.session_name + '\x1b[0m\r\n');
             term.write('\x1b[36m现在可以直接输入命令进行交互\x1b[0m\r\n\r\n');
+            
+            // 连接成功后再次调整终端大小
+            setTimeout(() => {
+                if (isInteractiveMode) {
+                    resizeTerminal();
+                }
+            }, 200);
         }
     });
     
@@ -951,7 +958,9 @@ function initTerminal() {
     
     // 监听窗口大小变化
     window.addEventListener('resize', () => {
-        setTimeout(() => window.fitAddon.fit(), 100);
+        setTimeout(() => {
+            resizeTerminal();
+        }, 100);
     });
     
     // 检查是否有上次选择的实例
@@ -1067,6 +1076,11 @@ function switchToReadOnlyMode() {
         if (term) {
             term.options.disableStdin = true;
             term.options.cursorBlink = false;
+            
+            // 调整终端大小
+            setTimeout(() => {
+                resizeTerminal();
+            }, 100);
         }
         
         // 重新开始日志监控
@@ -1087,6 +1101,11 @@ function switchToInteractiveMode() {
             term.options.disableStdin = false;
             term.options.cursorBlink = true;
             
+            // 调整终端大小
+            setTimeout(() => {
+                resizeTerminal();
+            }, 100);
+            
             // 绑定输入事件
             term.onData(data => {
                 if (isInteractiveMode && currentMonitoringInstance) {
@@ -1106,6 +1125,30 @@ function switchToInteractiveMode() {
             });
         }, 500);
     }
+}
+
+// 调整终端大小
+function resizeTerminal() {
+    if (window.fitAddon && term) {
+        window.fitAddon.fit();
+        
+        const cols = term.cols;
+        const rows = term.rows;
+        
+        console.log(`终端大小调整为: ${cols}x${rows}`);
+        
+        // 如果是交互模式，同步到服务器
+        if (isInteractiveMode && currentMonitoringInstance) {
+            socket.emit('terminal_resize', {
+                instance_id: currentMonitoringInstance,
+                cols: cols,
+                rows: rows
+            });
+        }
+        
+        return {cols, rows};
+    }
+    return null;
 }
 
 // 获取实例的会话名称
