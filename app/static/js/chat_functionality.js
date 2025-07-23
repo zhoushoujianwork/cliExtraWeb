@@ -29,7 +29,11 @@ function sendMessage() {
     // 显示用户消息
     const timestamp = new Date().toLocaleTimeString();
     addUserMessage(message, timestamp);
+    
+    // 清空输入框并重置高度
     messageInput.value = '';
+    messageInput.style.height = 'auto';
+    messageInput.style.height = '38px'; // 重置为最小高度
     
     // 根据是否有@来决定发送方式
     if (mentions.length > 0) {
@@ -304,10 +308,26 @@ function insertInstanceMention(instanceId, atPosition) {
     messageInput.focus();
 }
 
-// 更新可用实例列表
+// 更新可用实例列表（只包含当前 namespace 的实例）
 function updateAvailableInstances(instances) {
-    availableInstances = instances || [];
-    console.log('更新可用实例列表:', availableInstances);
+    // 根据当前 namespace 过滤实例
+    const currentNs = getCurrentNamespace();
+    let filteredInstances = instances || [];
+    
+    if (currentNs) {
+        filteredInstances = instances.filter(instance => 
+            instance.namespace === currentNs
+        );
+    }
+    
+    availableInstances = filteredInstances;
+    console.log('更新可用实例列表 (当前namespace:', currentNs, '):', availableInstances);
+}
+
+// 获取当前命名空间
+function getCurrentNamespace() {
+    // 从 simple_namespace.js 获取当前命名空间
+    return window.currentNamespace || null;
 }
 
 // 初始化聊天功能

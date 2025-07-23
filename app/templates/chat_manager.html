@@ -78,6 +78,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    height: 100%;
 }
 
 .chat-messages {
@@ -85,6 +86,8 @@
     overflow-y: auto;
     padding: 15px;
     background: #f8f9fa;
+    height: calc(100vh - 200px); /* 与终端高度一致 */
+    min-height: 400px;
 }
 
 .chat-input-area {
@@ -93,11 +96,33 @@
     background: white;
 }
 
+/* 自适应 textarea 样式 */
+.auto-resize-textarea {
+    resize: none;
+    overflow: hidden;
+    min-height: 38px;
+    max-height: 120px;
+    line-height: 1.4;
+    transition: height 0.1s ease;
+}
+
+.chat-input-area .input-group {
+    align-items: flex-end;
+}
+
+.chat-input-area .btn {
+    height: fit-content;
+    align-self: flex-end;
+    min-height: 38px;
+}
+
 .terminal-container {
     flex: 1;
     background: #000;
     border-radius: 5px;
     overflow: hidden;
+    height: calc(100vh - 200px); /* 与聊天记录高度一致 */
+    min-height: 400px;
 }
 
 .terminal-header {
@@ -250,8 +275,10 @@
             </div>
             <div class="chat-input-area">
                 <div class="input-group">
-                    <input type="text" id="messageInput" class="form-control" placeholder="输入消息...">
-                    <button class="btn btn-primary" onclick="sendMessage()">发送</button>
+                    <textarea id="messageInput" class="form-control auto-resize-textarea" placeholder="输入消息... (Shift+Enter 换行，Enter 发送)" rows="1"></textarea>
+                    <button class="btn btn-primary" onclick="sendMessage()">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -470,6 +497,7 @@ function manualRefresh() {
 document.addEventListener('DOMContentLoaded', function() {
     initSocket();
     initTerminal();
+    initAutoResizeTextarea();
     
     // namespace管理器会自动加载实例
     // 定期刷新实例列表
@@ -479,5 +507,37 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 5000);
 });
+
+// 初始化自适应 textarea
+function initAutoResizeTextarea() {
+    const textarea = document.getElementById('messageInput');
+    if (!textarea) return;
+    
+    // 自适应高度函数
+    function autoResize() {
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+    }
+    
+    // 监听输入事件
+    textarea.addEventListener('input', autoResize);
+    
+    // 监听键盘事件
+    textarea.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            if (e.shiftKey) {
+                // Shift+Enter 换行，不做任何处理
+                return;
+            } else {
+                // Enter 发送消息
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+    });
+    
+    // 初始调整
+    autoResize();
+}
 </script>
 {% endblock %}
