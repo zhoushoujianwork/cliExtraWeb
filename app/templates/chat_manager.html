@@ -512,15 +512,18 @@
             </div>
             <div class="modal-body">
                 <form id="createInstanceForm">
-                    <!-- Namespace 选择 -->
+                    <!-- 当前 Namespace 显示 -->
                     <div class="mb-3">
-                        <label for="instanceNamespace" class="form-label">Namespace</label>
-                        <select class="form-select" id="instanceNamespace" required>
-                            <!-- 选项将通过JavaScript动态加载 -->
-                        </select>
+                        <label class="form-label">当前 Namespace</label>
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-layer-group"></i>
+                            </span>
+                            <input type="text" class="form-control" id="currentNamespaceDisplay" readonly>
+                        </div>
                         <div class="form-text">
                             <i class="fas fa-info-circle"></i> 
-                            选择实例所属的 namespace
+                            实例将在当前 namespace 中创建
                         </div>
                     </div>
                     
@@ -971,12 +974,11 @@ function createInstance() {
 }
 
 function showCreateInstanceModal() {
-    // 加载当前namespace到选择器
-    loadNamespacesForInstance();
+    // 设置当前namespace显示
+    const currentNs = getCurrentNamespace() || 'default';
+    document.getElementById('currentNamespaceDisplay').value = currentNs;
     
     // 设置默认值
-    const currentNs = getCurrentNamespace() || 'default';
-    document.getElementById('instanceNamespace').value = currentNs;
     document.getElementById('instanceName').value = '';
     document.getElementById('instanceRole').value = '';
     document.getElementById('instancePath').value = '';
@@ -986,27 +988,6 @@ function showCreateInstanceModal() {
     // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('createInstanceModal'));
     modal.show();
-}
-
-function loadNamespacesForInstance() {
-    fetch('/api/namespaces')
-        .then(response => response.json())
-        .then(data => {
-            const select = document.getElementById('instanceNamespace');
-            select.innerHTML = '';
-            
-            if (data.success && data.namespaces) {
-                data.namespaces.forEach(ns => {
-                    const option = document.createElement('option');
-                    option.value = ns.name;
-                    option.textContent = ns.name;
-                    select.appendChild(option);
-                });
-            }
-        })
-        .catch(error => {
-            console.error('加载namespace列表失败:', error);
-        });
 }
 
 function updatePathHelpText() {
@@ -1137,18 +1118,13 @@ function fillCurrentDirectory() {
 }
 
 async function createInstanceFromModal() {
-    const namespace = document.getElementById('instanceNamespace').value;
+    const namespace = getCurrentNamespace() || 'default'; // 使用当前namespace
     const name = document.getElementById('instanceName').value.trim();
     const role = document.getElementById('instanceRole').value;
     const path = document.getElementById('instancePath').value.trim();
     const isLocal = document.getElementById('localPath').checked;
     
     // 验证必填字段
-    if (!namespace) {
-        alert('请选择 namespace');
-        return;
-    }
-    
     if (!role) {
         alert('请选择实例角色');
         return;
