@@ -16,32 +16,61 @@
 .three-column-layout {
     display: flex;
     height: calc(100vh - 120px);
-    gap: 10px;
+    gap: 0;
+    position: relative;
 }
 
 .left-panel {
     width: 280px;
     min-width: 200px;
-    max-width: 400px;
-    resize: horizontal;
+    max-width: 500px;
     overflow: auto;
+    flex-shrink: 0;
 }
 
 .center-panel {
-    flex: 2;
-    min-width: 500px;
+    flex: 1;
+    min-width: 300px;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 .right-panel {
     width: 300px;
-    min-width: 250px;
+    min-width: 200px;
     max-width: 450px;
-    resize: horizontal;
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    flex-shrink: 0;
+}
+
+.resize-handle {
+    width: 4px;
+    background: #e9ecef;
+    cursor: col-resize;
+    position: relative;
+    flex-shrink: 0;
+    transition: background-color 0.2s;
+}
+
+.resize-handle:hover {
+    background: #007bff;
+}
+
+.resize-handle:active {
+    background: #0056b3;
+}
+
+.resize-handle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -2px;
+    right: -2px;
+    bottom: 0;
+    background: transparent;
 }
 
 .chat-container {
@@ -187,11 +216,14 @@
         </div>
     </div>
 
+    <!-- 左右分割线 -->
+    <div class="resize-handle" id="leftResizer"></div>
+
     <!-- 中间：终端输出 -->
     <div class="center-panel">
         <div class="card h-100">
             <div class="terminal-header">
-                <span><i class="fas fa-terminal"></i> 终端输出</span>
+                <span><i class="fas fa-terminal"></i> 终端输出 (只读)</span>
                 <div>
                     <button class="btn btn-sm btn-outline-light" onclick="clearTerminal()" title="清空终端">
                         <i class="fas fa-trash"></i>
@@ -203,6 +235,9 @@
             </div>
         </div>
     </div>
+
+    <!-- 中右分割线 -->
+    <div class="resize-handle" id="rightResizer"></div>
 
     <!-- 右侧：聊天区域 -->
     <div class="right-panel">
@@ -240,6 +275,9 @@
 
 <!-- 聊天功能 -->
 <script src="{{ url_for('static', filename='js/chat_functionality.js') }}"></script>
+
+<!-- 可调整大小的面板 -->
+<script src="{{ url_for('static', filename='js/resizable_panels.js') }}"></script>
 
 <script>
 // 全局变量
@@ -280,7 +318,7 @@ function initSocket() {
 
 // 初始化终端
 function initTerminal() {
-    term = new Terminal({
+    window.term = new Terminal({
         theme: {
             background: '#000000',
             foreground: '#ffffff',
@@ -305,30 +343,35 @@ function initTerminal() {
         },
         fontSize: 13,
         fontFamily: 'Monaco, Menlo, "Ubuntu Mono", "Courier New", monospace',
-        cursorBlink: true,
+        cursorBlink: false,  // 只读模式，不需要光标闪烁
         cursorStyle: 'block',
         scrollback: 10000,
         tabStopWidth: 4,
-        convertEol: true,  // 自动转换换行符
+        convertEol: true,
         allowTransparency: false,
         bellSound: null,
-        bellStyle: 'none'
+        bellStyle: 'none',
+        disableStdin: true  // 禁用输入，只读模式
     });
     
-    fitAddon = new FitAddon.FitAddon();
-    term.loadAddon(fitAddon);
+    window.fitAddon = new FitAddon.FitAddon();
+    window.term.loadAddon(window.fitAddon);
     
-    term.open(document.getElementById('terminal'));
-    fitAddon.fit();
+    window.term.open(document.getElementById('terminal'));
+    window.fitAddon.fit();
     
     // 监听窗口大小变化
     window.addEventListener('resize', () => {
-        setTimeout(() => fitAddon.fit(), 100);
+        setTimeout(() => window.fitAddon.fit(), 100);
     });
     
     // 欢迎信息
-    term.writeln('\x1b[32mWelcome to Q Chat Terminal Monitor\x1b[0m');
-    term.writeln('Select an instance to start monitoring its output...\r\n');
+    window.term.writeln('\x1b[32mWelcome to Q Chat Terminal Monitor (Read-Only)\x1b[0m');
+    window.term.writeln('Select an instance to start monitoring its output...\r\n');
+    
+    // 使用全局变量以便其他函数访问
+    term = window.term;
+    fitAddon = window.fitAddon;
 }
 
 // 开始监控实例
