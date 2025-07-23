@@ -164,7 +164,7 @@ function updateInstancesList(instances) {
                     ${instance.namespace ? '<br><small class="text-muted">ns: ' + instance.namespace + '</small>' : ''}
                 </div>
                 <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-primary" onclick="startMonitoring('${instance.id}')" title="监控输出">
+                    <button class="btn btn-outline-primary" onclick="startMonitoringWithMemory('${instance.id}')" title="监控输出">
                         <i class="fas fa-eye"></i>
                     </button>
                     <button class="btn btn-outline-danger" onclick="stopInstance('${instance.id}')" title="停止实例">
@@ -175,6 +175,30 @@ function updateInstancesList(instances) {
         `;
         instancesList.appendChild(instanceDiv);
     });
+    
+    // 尝试自动恢复上次选择的实例
+    if (window.terminalMemory) {
+        window.terminalMemory.autoRestoreTerminalSelection(instances, (instanceId) => {
+            console.log('🔄 自动恢复终端监控:', instanceId);
+            startMonitoring(instanceId);
+        });
+    }
+}
+
+/**
+ * 带记忆功能的开始监控
+ * @param {string} instanceId - 实例ID
+ */
+function startMonitoringWithMemory(instanceId) {
+    // 保存用户选择
+    if (window.terminalMemory) {
+        window.terminalMemory.saveLastSelectedInstance(instanceId, currentNamespace || 'default');
+    }
+    
+    // 开始监控
+    if (typeof startMonitoring === 'function') {
+        startMonitoring(instanceId);
+    }
 }
 
 /**

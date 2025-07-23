@@ -273,6 +273,9 @@
 <!-- 简化的namespace管理 -->
 <script src="{{ url_for('static', filename='js/simple_namespace.js') }}"></script>
 
+<!-- 终端记忆功能 -->
+<script src="{{ url_for('static', filename='js/terminal_memory.js') }}"></script>
+
 <!-- 聊天功能 -->
 <script src="{{ url_for('static', filename='js/chat_functionality.js') }}"></script>
 
@@ -368,9 +371,18 @@ function initTerminal() {
         setTimeout(() => window.fitAddon.fit(), 100);
     });
     
-    // 欢迎信息
-    window.term.writeln('\x1b[32mWelcome to Q Chat Terminal Monitor (Read-Only)\x1b[0m');
-    window.term.writeln('Select an instance to start monitoring its output...\r\n');
+    // 检查是否有上次选择的实例
+    const lastSelected = window.terminalMemory ? window.terminalMemory.getLastSelectedInstance() : null;
+    
+    if (lastSelected) {
+        // 显示恢复信息
+        window.term.writeln('\x1b[32mWelcome to Q Chat Terminal Monitor (Read-Only)\x1b[0m');
+        window.term.writeln('\x1b[36mRestoring last selected instance...\x1b[0m\r\n');
+    } else {
+        // 显示默认欢迎信息
+        window.term.writeln('\x1b[32mWelcome to Q Chat Terminal Monitor (Read-Only)\x1b[0m');
+        window.term.writeln('Select an instance to start monitoring its output...\r\n');
+    }
     
     // 使用全局变量以便其他函数访问
     term = window.term;
