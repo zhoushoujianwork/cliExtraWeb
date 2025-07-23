@@ -109,8 +109,8 @@ async function refreshChatCacheInternal(namespace) {
     }
 }
 
-// 刷新聊天缓存
-async function refreshChatCache() {
+// 刷新聊天缓存（全局函数，供按钮调用）
+window.refreshChatCache = async function() {
     try {
         const namespace = getCurrentNamespace() || 'q_cli';
         
@@ -119,6 +119,8 @@ async function refreshChatCache() {
         const originalContent = button.innerHTML;
         button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 刷新中...';
         button.disabled = true;
+        
+        console.log('手动刷新缓存，namespace:', namespace);
         
         const response = await fetch('/api/chat/refresh-cache', {
             method: 'POST',
@@ -131,6 +133,7 @@ async function refreshChatCache() {
         });
         
         const data = await response.json();
+        console.log('刷新缓存响应:', data);
         
         if (data.success) {
             chatHistory = data.history || [];
@@ -150,17 +153,39 @@ async function refreshChatCache() {
         
         // 恢复按钮状态
         const button = event.target.closest('button');
-        button.innerHTML = '<i class="fas fa-sync-alt"></i> 刷新缓存';
-        button.disabled = false;
+        if (button) {
+            button.innerHTML = '<i class="fas fa-sync-alt"></i> 刷新缓存';
+            button.disabled = false;
+        }
     }
-}
+};
 
-// 清空聊天历史显示
-function clearChatHistory() {
+// 清空聊天历史显示（全局函数，供按钮调用）
+window.clearChatHistory = function() {
     if (confirm('确定要清空当前显示的聊天记录吗？这不会影响实际的历史数据。')) {
         chatHistory = [];
         renderChatHistory();
         showNotification('聊天记录已清空', 'info');
+    }
+};
+
+// 刷新聊天缓存
+async function refreshChatCache() {
+// 显示通知消息（兼容函数）
+function showNotification(message, type) {
+    // 尝试使用现有的通知系统
+    if (typeof window.showNotification === 'function') {
+        window.showNotification(message, type);
+        return;
+    }
+    
+    // 简单的 alert 作为后备
+    if (type === 'error') {
+        alert('错误: ' + message);
+    } else if (type === 'success') {
+        alert('成功: ' + message);
+    } else {
+        alert(message);
     }
 }
 
