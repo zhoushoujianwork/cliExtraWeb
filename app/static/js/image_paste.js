@@ -120,16 +120,21 @@ class ImagePasteHandler {
             if (result.success) {
                 console.log('图片上传成功:', result.path);
                 
-                // 在输入框中插入图片标记，使用相对路径
-                const imageUrl = result.url;
-                const currentValue = this.inputElement.value;
-                const newValue = currentValue + (currentValue ? '\n' : '') + `![图片](${imageUrl})`;
-                this.inputElement.value = newValue;
-                
-                // 触发input事件
-                this.inputElement.dispatchEvent(new Event('input'));
-                
-                this.showUploadStatus('图片上传成功!', 'success');
+                // 在输入框中插入图片标记，优先使用path，fallback到url
+                const imageUrl = result.path || result.url;
+                if (imageUrl) {
+                    const currentValue = this.inputElement.value;
+                    const newValue = currentValue + (currentValue ? '\n' : '') + `![图片](${imageUrl})`;
+                    this.inputElement.value = newValue;
+                    
+                    // 触发input事件
+                    this.inputElement.dispatchEvent(new Event('input'));
+                    
+                    this.showUploadStatus('图片上传成功!', 'success');
+                } else {
+                    console.error('服务器响应中缺少图片路径信息:', result);
+                    this.showUploadStatus('图片上传成功，但路径信息缺失', 'warning');
+                }
                 
                 // 聚焦到输入框
                 this.inputElement.focus();

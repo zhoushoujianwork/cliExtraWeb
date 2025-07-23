@@ -1243,12 +1243,14 @@ def upload_image():
         file_path = os.path.join(temp_dir, filename)
         file.save(file_path)
         
-        logger.info("图片上传成功: {}\3".format(file_path))
+        logger.info("图片上传成功: {}".format(file_path))
         
         return jsonify({
             'success': True,
-            'path': file_path,
-            'filename': filename,
+            'path': file_path,           # 绝对路径
+            'url': file_path,            # 兼容性：也提供url字段
+            'filename': filename,        # 文件名
+            'relative_path': f'temp_images/{filename}',  # 相对路径
             'message': '图片上传成功'
         })
         
