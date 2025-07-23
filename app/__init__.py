@@ -26,6 +26,7 @@ def create_app(config_class=Config):
     from app.views.dag_api import bp as dag_api_bp
     from app.views.directory_api import directory_bp
     from app.views.config_api import config_bp
+    from app.views.namespace_api import namespace_api_bp
     
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp, url_prefix='/api')
@@ -36,6 +37,7 @@ def create_app(config_class=Config):
     app.register_blueprint(dag_api_bp)
     app.register_blueprint(directory_bp)
     app.register_blueprint(config_bp)
+    app.register_blueprint(namespace_api_bp)
     
     # 应用启动时同步tmux实例
     with app.app_context():

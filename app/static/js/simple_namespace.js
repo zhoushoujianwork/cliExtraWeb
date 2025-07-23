@@ -46,32 +46,16 @@ function getCurrentNamespace() {
  * 加载namespace列表
  */
 function loadNamespaces() {
-    return fetch('/api/instances')
+    return fetch('/api/namespaces')
         .then(response => response.json())
         .then(data => {
-            allInstances = data.instances || [];
+            if (!data.success) {
+                console.error('获取namespace失败:', data.error);
+                return [];
+            }
             
-            // 统计每个namespace的实例数量
-            const namespaceStats = new Map();
-            
-            allInstances.forEach(instance => {
-                const ns = instance.namespace || ''; // 空namespace也要统计
-                if (namespaceStats.has(ns)) {
-                    namespaceStats.set(ns, namespaceStats.get(ns) + 1);
-                } else {
-                    namespaceStats.set(ns, 1);
-                }
-            });
-            
-            // 转换为数组并排序
-            const namespaces = Array.from(namespaceStats.keys()).sort((a, b) => {
-                // 空namespace（全部）排在最前面
-                if (a === '' && b !== '') return -1;
-                if (a !== '' && b === '') return 1;
-                return a.localeCompare(b);
-            });
-            
-            updateNamespaceSelect(namespaces, namespaceStats);
+            const namespaces = data.namespaces || [];
+            updateNamespaceSelect(namespaces);
             
             return namespaces;
         })
@@ -84,7 +68,7 @@ function loadNamespaces() {
 /**
  * 更新namespace选择器
  */
-function updateNamespaceSelect(namespaces, namespaceStats) {
+function updateNamespaceSelect(namespaces) {
     const select = document.getElementById('currentNamespaceSelect');
     if (!select) return;
     
@@ -92,26 +76,22 @@ function updateNamespaceSelect(namespaces, namespaceStats) {
     
     namespaces.forEach(ns => {
         const option = document.createElement('option');
-        option.value = ns;
+        option.value = ns.name;
         
-        const instanceCount = namespaceStats.get(ns) || 0;
+        // 使用display_name和instance_count
+        const displayName = ns.display_name || ns.name || '全部';
+        const instanceCount = ns.instance_count || 0;
+        option.textContent = `${displayName} (${instanceCount})`;
         
-        if (ns === '') {
-            // 空namespace显示为"全部"
-            option.textContent = `全部 (${allInstances.length})`;
-        } else {
-            // 其他namespace显示名称和实例数
-            option.textContent = `${ns} (${instanceCount})`;
-        }
-        
-        if (ns === currentNamespace) {
+        if (ns.name === currentNamespace) {
             option.selected = true;
         }
         select.appendChild(option);
     });
     
     // 如果当前选择的namespace不存在，重置为空（全部）
-    if (currentNamespace && !namespaces.includes(currentNamespace)) {
+    const namespaceNames = namespaces.map(ns => ns.name);
+    if (currentNamespace && !namespaceNames.includes(currentNamespace)) {
         console.log(`当前namespace "${currentNamespace}" 不存在，重置为全部`);
         currentNamespace = '';
         window.currentNamespace = '';
