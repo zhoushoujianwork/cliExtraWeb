@@ -315,7 +315,10 @@ def get_chat_history():
     """获取聊天历史"""
     try:
         limit = request.args.get('limit', type=int)
-        history = chat_manager.get_chat_history(limit=limit)
+        namespace = request.args.get('namespace', 'q_cli')
+        
+        # 获取聊天历史，支持namespace参数
+        history = chat_manager.get_chat_history(limit=limit, namespace=namespace)
         return jsonify({'success': True, 'history': history})
     except Exception as e:
         logger.error("获取聊天历史失败: {}\3".format(str(e)))

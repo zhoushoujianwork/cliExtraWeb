@@ -1,6 +1,6 @@
 {
   "project_name": "cliExtra", 
-  "name": "默认开发流程", 
+  "name": "智能协作开发流程", 
   "repository": "https://github.com/zhoushoujianwork/cliExtra.git", 
   "collaboration_rules": [
     {
@@ -8,15 +8,55 @@
       "to_role": "frontend-engineer", 
       "from_role": "devops-engineer", 
       "trigger": "CLI功能更新", 
-      "message_template": "CLI功能已更新，请适配Web界面", 
+      "trigger_conditions": {
+        "code_committed": true,
+        "tests_passed": true,
+        "api_changed": true,
+        "documentation_updated": true
+      },
+      "message_template": "CLI功能已更新，API版本{v1.2}，请适配Web界面", 
       "auto_execute": true, 
-      "action": "通知Web界面适配", 
+      "action": "通知Web界面适配",
+      "required_actions": [
+        "update_api_specs",
+        "trigger_web_tests", 
+        "notify_frontend_team"
+      ],
       "id": "collab-1"
+    },
+    {
+      "priority": "medium",
+      "to_role": "devops-engineer",
+      "from_role": "frontend-engineer", 
+      "trigger": "Web界面完成",
+      "trigger_conditions": {
+        "ui_completed": true,
+        "user_tests_passed": true,
+        "integration_ready": true
+      },
+      "message_template": "Web界面开发完成，请进行集成测试",
+      "auto_execute": true,
+      "action": "启动集成测试",
+      "required_actions": [
+        "run_integration_tests",
+        "deploy_staging",
+        "performance_test"
+      ],
+      "id": "collab-2"
     }
   ], 
   "created_at": "2025-07-23T13:23:23.700675", 
   "created_by": "system", 
   "updated_at": "2025-07-23T13:23:23.701331", 
+  "state_transitions": {
+    "pending": ["in_progress", "blocked"],
+    "in_progress": ["completed", "failed", "blocked", "review_needed"],
+    "completed": ["verified", "failed"],
+    "failed": ["retry", "escalate", "rollback"],
+    "blocked": ["in_progress", "escalate"],
+    "verified": ["deployed", "failed"],
+    "deployed": ["monitoring", "failed"]
+  },
   "edges": [
     {
       "style": {
@@ -24,11 +64,16 @@
         "width": 2
       }, 
       "source_handle": "output", 
-      "label": "", 
+      "label": "项目启动", 
       "target_node_id": "task-1", 
       "source_node_id": "start-1", 
       "target_handle": "input", 
-      "id": "edge-1"
+      "id": "edge-1",
+      "trigger_conditions": {
+        "type": "manual",
+        "required_inputs": ["project_requirements", "team_availability"],
+        "validation_rules": ["requirements_complete", "team_ready"]
+      }
     }, 
     {
       "style": {
@@ -36,11 +81,16 @@
         "width": 2
       }, 
       "source_handle": "output", 
-      "label": "", 
+      "label": "需求确认", 
       "target_node_id": "task-2", 
       "source_node_id": "task-1", 
       "target_handle": "input", 
-      "id": "edge-2"
+      "id": "edge-2",
+      "trigger_conditions": {
+        "type": "automatic",
+        "required_deliverables": ["需求文档", "技术方案"],
+        "quality_gates": ["review_approved", "stakeholder_signed"]
+      }
     }, 
     {
       "style": {
@@ -48,11 +98,16 @@
         "width": 2
       }, 
       "source_handle": "output", 
-      "label": "", 
+      "label": "设计完成", 
       "target_node_id": "parallel-1", 
       "source_node_id": "task-2", 
       "target_handle": "input", 
-      "id": "edge-3"
+      "id": "edge-3",
+      "trigger_conditions": {
+        "type": "automatic",
+        "required_deliverables": ["架构文档", "接口规范"],
+        "quality_gates": ["architecture_review_passed", "api_spec_approved"]
+      }
     }, 
     {
       "style": {
@@ -64,7 +119,12 @@
       "target_node_id": "task-3", 
       "source_node_id": "parallel-1", 
       "target_handle": "input", 
-      "id": "edge-4"
+      "id": "edge-4",
+      "trigger_conditions": {
+        "type": "automatic",
+        "required_deliverables": ["技术设计完成"],
+        "dependencies": ["task-2-completed"]
+      }
     }, 
     {
       "style": {
@@ -76,7 +136,12 @@
       "target_node_id": "task-4", 
       "source_node_id": "parallel-1", 
       "target_handle": "input", 
-      "id": "edge-5"
+      "id": "edge-5",
+      "trigger_conditions": {
+        "type": "automatic",
+        "required_deliverables": ["技术设计完成"],
+        "dependencies": ["task-2-completed"]
+      }
     }, 
     {
       "style": {
@@ -84,11 +149,16 @@
         "width": 2
       }, 
       "source_handle": "output", 
-      "label": "", 
+      "label": "CLI完成", 
       "target_node_id": "task-5", 
       "source_node_id": "task-3", 
       "target_handle": "input", 
-      "id": "edge-6"
+      "id": "edge-6",
+      "trigger_conditions": {
+        "type": "automatic",
+        "required_deliverables": ["CLI工具", "测试报告", "使用文档"],
+        "quality_gates": ["unit_tests_passed", "integration_tests_passed", "code_review_approved"]
+      }
     }, 
     {
       "style": {
@@ -96,11 +166,16 @@
         "width": 2
       }, 
       "source_handle": "output", 
-      "label": "", 
+      "label": "Web完成", 
       "target_node_id": "task-5", 
       "source_node_id": "task-4", 
       "target_handle": "input", 
-      "id": "edge-7"
+      "id": "edge-7",
+      "trigger_conditions": {
+        "type": "automatic",
+        "required_deliverables": ["Web界面", "用户手册"],
+        "quality_gates": ["ui_tests_passed", "accessibility_compliant", "code_review_approved"]
+      }
     }, 
     {
       "style": {
@@ -108,11 +183,17 @@
         "width": 2
       }, 
       "source_handle": "output", 
-      "label": "", 
+      "label": "集成完成", 
       "target_node_id": "end-1", 
       "source_node_id": "task-5", 
       "target_handle": "input", 
-      "id": "edge-8"
+      "id": "edge-8",
+      "trigger_conditions": {
+        "type": "automatic",
+        "required_deliverables": ["测试报告", "修复记录"],
+        "quality_gates": ["end_to_end_tests_passed", "performance_benchmarks_met", "security_scan_clean"],
+        "dependencies": ["task-3-completed", "task-4-completed"]
+      }
     }
   ], 
   "notifications": {
@@ -120,9 +201,26 @@
     "channels": [
       "cliExtra_send", 
       "cliExtra_broadcast"
+    ],
+    "notification_rules": [
+      {
+        "event": "task_completed",
+        "recipients": ["task_owner", "next_task_owner"],
+        "template": "任务 {task_name} 已完成，可开始 {next_task_name}"
+      },
+      {
+        "event": "quality_gate_failed", 
+        "recipients": ["task_owner", "project_manager"],
+        "template": "质量门禁失败：{task_name} - {failure_reason}"
+      },
+      {
+        "event": "collaboration_triggered",
+        "recipients": ["target_role"],
+        "template": "协作触发：{trigger_message}"
+      }
     ]
   }, 
-  "version": "1.0.0", 
+  "version": "2.0.0", 
   "canvas_config": {
     "width": 1200, 
     "pan_x": 0, 
@@ -135,22 +233,30 @@
       "responsibilities": [
         "Shell脚本开发", 
         "系统管理", 
-        "自动化运维"
+        "自动化运维",
+        "CI/CD流程",
+        "性能优化"
       ], 
       "tools": [
         "git", 
         "shell", 
         "tmux", 
-        "bash"
+        "bash",
+        "docker",
+        "jenkins"
       ], 
       "name": "devops-engineer", 
-      "description": "运维工程师 - Shell脚本开发和系统管理"
+      "description": "运维工程师 - Shell脚本开发和系统管理",
+      "permissions": ["deploy", "test", "monitor"],
+      "escalation_path": "project_manager"
     }, 
     {
       "responsibilities": [
         "Web界面开发", 
         "用户体验设计", 
-        "API集成"
+        "API集成",
+        "前端测试",
+        "性能优化"
       ], 
       "tools": [
         "git", 
@@ -158,10 +264,14 @@
         "javascript", 
         "html", 
         "css", 
-        "python"
+        "python",
+        "jest",
+        "cypress"
       ], 
       "name": "frontend-engineer", 
-      "description": "前端工程师 - Web界面开发"
+      "description": "前端工程师 - Web界面开发",
+      "permissions": ["develop", "test", "deploy_frontend"],
+      "escalation_path": "project_manager"
     }
   ], 
   "project_description": "基于tmux的Amazon Q CLI实例管理系统", 
@@ -183,7 +293,11 @@
       }, 
       "type": "start", 
       "id": "start-1", 
-      "description": "工作流开始"
+      "description": "工作流开始",
+      "completion_criteria": {
+        "manual_trigger": true,
+        "required_inputs": ["project_requirements"]
+      }
     }, 
     {
       "deliverables": [
@@ -211,7 +325,18 @@
         "可行性分析", 
         "技术调研"
       ], 
-      "description": "分析用户需求和技术可行性"
+      "description": "分析用户需求和技术可行性",
+      "completion_criteria": {
+        "deliverables_ready": ["需求文档", "技术方案"],
+        "quality_gates": ["review_approved", "stakeholder_signed"],
+        "estimated_duration": "3-5天",
+        "success_metrics": ["requirements_clarity", "technical_feasibility"]
+      },
+      "error_handling": {
+        "retry_count": 2,
+        "escalation_trigger": "requirements_unclear",
+        "fallback_action": "schedule_workshop"
+      }
     }, 
     {
       "deliverables": [
@@ -239,7 +364,18 @@
         "技术选型", 
         "接口设计"
       ], 
-      "description": "设计系统架构和技术方案"
+      "description": "设计系统架构和技术方案",
+      "completion_criteria": {
+        "deliverables_ready": ["架构文档", "接口规范"],
+        "quality_gates": ["architecture_review_passed", "api_spec_approved"],
+        "estimated_duration": "5-7天",
+        "success_metrics": ["architecture_soundness", "api_completeness"]
+      },
+      "error_handling": {
+        "retry_count": 1,
+        "escalation_trigger": "architecture_complexity",
+        "fallback_action": "consult_architect"
+      }
     }, 
     {
       "status": "pending", 
@@ -258,7 +394,11 @@
       }, 
       "type": "decision", 
       "id": "parallel-1", 
-      "description": "CLI和Web界面并行开发"
+      "description": "CLI和Web界面并行开发",
+      "completion_criteria": {
+        "dependencies_satisfied": ["task-2-completed"],
+        "parallel_tasks_ready": ["task-3-ready", "task-4-ready"]
+      }
     }, 
     {
       "deliverables": [
@@ -287,7 +427,25 @@
         "功能测试", 
         "文档更新"
       ], 
-      "description": "开发和测试CLI功能"
+      "description": "开发和测试CLI功能",
+      "completion_criteria": {
+        "deliverables_ready": ["CLI工具", "测试报告", "使用文档"],
+        "quality_gates": ["unit_tests_passed", "integration_tests_passed", "code_review_approved"],
+        "estimated_duration": "10-15天",
+        "success_metrics": ["functionality_complete", "test_coverage_90%", "documentation_quality"]
+      },
+      "error_handling": {
+        "retry_count": 3,
+        "escalation_trigger": "critical_bug",
+        "fallback_action": "pair_programming"
+      },
+      "collaboration_triggers": [
+        {
+          "event": "api_changed",
+          "target_role": "frontend-engineer",
+          "message": "CLI API已更新，请同步Web界面"
+        }
+      ]
     }, 
     {
       "deliverables": [
@@ -315,7 +473,25 @@
         "用户体验", 
         "API集成"
       ], 
-      "description": "开发Web管理界面"
+      "description": "开发Web管理界面",
+      "completion_criteria": {
+        "deliverables_ready": ["Web界面", "用户手册"],
+        "quality_gates": ["ui_tests_passed", "accessibility_compliant", "code_review_approved"],
+        "estimated_duration": "12-18天",
+        "success_metrics": ["ui_completeness", "user_experience", "accessibility_score"]
+      },
+      "error_handling": {
+        "retry_count": 2,
+        "escalation_trigger": "ui_complexity",
+        "fallback_action": "ui_review_session"
+      },
+      "collaboration_triggers": [
+        {
+          "event": "ui_completed",
+          "target_role": "devops-engineer",
+          "message": "Web界面开发完成，请进行集成测试"
+        }
+      ]
     }, 
     {
       "deliverables": [
@@ -343,7 +519,19 @@
         "Bug修复", 
         "性能优化"
       ], 
-      "description": "测试CLI和Web功能集成"
+      "description": "测试CLI和Web功能集成",
+      "completion_criteria": {
+        "deliverables_ready": ["测试报告", "修复记录"],
+        "quality_gates": ["end_to_end_tests_passed", "performance_benchmarks_met", "security_scan_clean"],
+        "dependencies": ["task-3-completed", "task-4-completed"],
+        "estimated_duration": "5-7天",
+        "success_metrics": ["integration_success", "performance_targets", "security_compliance"]
+      },
+      "error_handling": {
+        "retry_count": 2,
+        "escalation_trigger": "integration_failure",
+        "fallback_action": "debug_session"
+      }
     }, 
     {
       "status": "pending", 
@@ -362,9 +550,26 @@
       }, 
       "type": "end", 
       "id": "end-1", 
-      "description": "工作流结束"
+      "description": "工作流结束",
+      "completion_criteria": {
+        "all_tasks_completed": true,
+        "final_approval": true
+      }
     }
   ], 
   "id": "default-workflow-1", 
-  "description": "标准的软件开发工作流程"
+  "description": "智能协作软件开发工作流程",
+  "ai_guidance": {
+    "workflow_rules": [
+      "检查任务完成条件后再触发下一步",
+      "质量门禁失败时自动通知相关人员",
+      "协作触发时确保所有必要条件满足",
+      "错误处理时遵循定义的升级路径"
+    ],
+    "decision_points": [
+      "并行任务启动前确认依赖关系",
+      "集成测试前确认两个分支都完成",
+      "质量门禁失败时决定重试或升级"
+    ]
+  }
 }
