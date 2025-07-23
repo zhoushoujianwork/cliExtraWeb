@@ -1127,17 +1127,20 @@ function updatePathHelpText() {
         browseBtn.style.display = 'block';
         browseBtn.disabled = false;
     } else {
-        // 获取默认项目目录并显示
+        // 获取默认项目目录并显示完整路径
         fetch('/api/config/projects-dir')
             .then(response => response.json())
             .then(data => {
-                if (data.success) {
-                    helpText.innerHTML = `<i class="fas fa-info-circle"></i> 请输入Git仓库地址，将自动克隆到: <code>${data.projects_dir}</code>`;
+                if (data.success && data.projects_dir) {
+                    // 确保显示完整的绝对路径
+                    const projectsDir = data.projects_dir;
+                    helpText.innerHTML = `<i class="fas fa-info-circle"></i> 请输入Git仓库地址，将自动克隆到: <br><code style="word-break: break-all;">${projectsDir}</code>`;
                 } else {
                     helpText.innerHTML = '<i class="fas fa-info-circle"></i> 请输入Git仓库地址，将自动克隆到默认项目目录';
                 }
             })
-            .catch(() => {
+            .catch(error => {
+                console.error('获取项目目录失败:', error);
                 helpText.innerHTML = '<i class="fas fa-info-circle"></i> 请输入Git仓库地址，将自动克隆到默认项目目录';
             });
         

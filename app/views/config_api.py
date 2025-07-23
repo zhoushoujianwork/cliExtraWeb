@@ -32,11 +32,16 @@ def get_projects_dir():
     """获取默认项目目录"""
     try:
         projects_dir = project_config.get_default_projects_dir()
+        
+        # 确保返回绝对路径
+        abs_projects_dir = os.path.abspath(os.path.expanduser(projects_dir))
+        
         return jsonify({
             'success': True,
-            'projects_dir': projects_dir,
-            'exists': os.path.exists(projects_dir),
-            'writable': os.access(projects_dir, os.W_OK) if os.path.exists(projects_dir) else False
+            'projects_dir': abs_projects_dir,
+            'exists': os.path.exists(abs_projects_dir),
+            'writable': os.access(abs_projects_dir, os.W_OK) if os.path.exists(abs_projects_dir) else False,
+            'is_absolute': os.path.isabs(abs_projects_dir)
         })
     except Exception as e:
         logger.error(f'获取项目目录失败: {e}')
@@ -141,7 +146,58 @@ def set_git_settings():
             'error': str(e)
         }), 500
 
-@config_bp.route('/api/config/validate-git-url', methods=['POST'])
+@config_bp.route('/api/config/cliextra-info', methods=['GET'])
+def get_cliextra_info():
+    """获取cliExtra配置信息"""
+    try:
+        import subprocess
+        
+        # 获取cliExtra配置
+        result = subprocess.run(
+            ['cliExtra', 'config', 'show'],
+            capture_output=True, text=True, timeout=10
+        )
+        
+        if result.returncode != 0:
+            return jsonify({
+                'success': False,
+                'error': 'cliExtra配置获取失败'
+            }), 500
+        
+        # 解析配置输出
+        config_info = {}
+        lines = result.stdout.split('\n')
+        
+        for line in lines:
+            if ':' in line and not line.startswith('==='):
+                key, value = line.split(':', 1)
+                key = key.strip()
+                value = value.strip()
+                
+                if key in ['工作目录', '配置文件', '工具源目录', '规则源目录']:
+                    config_info[key] = value
+                elif key in ['Namespaces', 'Projects', 'Logs', 'Cache']:
+                    config_info[key] = value
+        
+        return jsonify({
+            'success': True,
+            'cliextra_config': config_info,
+            'projects_dir': config_info.get('Projects', ''),
+            'working_dir': config_info.get('工作目录', ''),
+            'raw_output': result.stdout
+        })
+        
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            'success': False,
+            'error': 'cliExtra配置获取超时'
+        }), 500
+    except Exception as e:
+        logger.error(f'获取cliExtra配置失败: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 def validate_git_url():
     """验证Git URL"""
     try:

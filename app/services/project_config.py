@@ -32,14 +32,44 @@ class ProjectConfig:
     
     def _get_default_config(self) -> Dict:
         """获取默认配置"""
-        home_dir = os.path.expanduser('~')
+        # 尝试从cliExtra获取配置
+        cliextra_projects_dir = self._get_cliextra_projects_dir()
+        
         return {
-            'default_projects_dir': os.path.join(home_dir, 'Projects'),
+            'default_projects_dir': cliextra_projects_dir,
             'git_clone_timeout': 300,  # 5分钟
             'auto_create_projects_dir': True,
             'git_clone_naming': 'repo_name',  # 'repo_name' 或 'instance_name'
             'version': '1.0'
         }
+    
+    def _get_cliextra_projects_dir(self) -> str:
+        """从cliExtra配置获取Projects目录"""
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['cliExtra', 'config', 'show'],
+                capture_output=True, text=True, timeout=10
+            )
+            
+            if result.returncode == 0:
+                # 解析输出找到Projects目录
+                lines = result.stdout.split('\n')
+                for line in lines:
+                    if line.startswith('Projects:'):
+                        projects_dir = line.split(':', 1)[1].strip()
+                        if os.path.exists(projects_dir):
+                            logger.info(f'使用cliExtra配置的Projects目录: {projects_dir}')
+                            return projects_dir
+                        
+        except Exception as e:
+            logger.warning(f'获取cliExtra配置失败: {e}')
+        
+        # 回退到默认路径
+        home_dir = os.path.expanduser('~')
+        fallback_dir = os.path.join(home_dir, 'Projects')
+        logger.info(f'使用默认Projects目录: {fallback_dir}')
+        return fallback_dir
     
     def _save_config(self):
         """保存配置文件"""
