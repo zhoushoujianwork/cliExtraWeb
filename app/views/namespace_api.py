@@ -36,22 +36,10 @@ def get_namespaces():
             # 计算总实例数
             total_instances = sum(ns.get('instance_count', 0) for ns in namespaces)
             
-            # 添加"全部"选项
-            all_instances = []
-            for ns in namespaces:
-                all_instances.extend(ns.get('instances', []))
+            # 构建namespace列表（不包含"全部"选项）
+            complete_namespaces = []
             
-            # 构建完整的namespace列表（包含"全部"选项）
-            complete_namespaces = [
-                {
-                    'name': '',  # 空字符串表示"全部"
-                    'display_name': '全部',
-                    'instance_count': total_instances,
-                    'instances': all_instances
-                }
-            ]
-            
-            # 添加其他namespace
+            # 只添加实际的namespace
             for ns in namespaces:
                 complete_namespaces.append({
                     'name': ns.get('name', ''),

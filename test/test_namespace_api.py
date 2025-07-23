@@ -159,19 +159,17 @@ def compare_results(qq_data, api_data):
     qq_namespaces = qq_data.get('namespaces', [])
     api_namespaces = api_data.get('namespaces', [])
     
-    # 过滤掉API中的"全部"选项
-    api_real_namespaces = [ns for ns in api_namespaces if ns.get('name') != '']
-    
+    # API现在不包含"全部"选项，直接比较实际namespace
     print(f"qq命令返回: {len(qq_namespaces)} 个namespace")
-    print(f"API返回: {len(api_real_namespaces)} 个实际namespace (不含'全部')")
+    print(f"API返回: {len(api_namespaces)} 个namespace")
     
-    if len(qq_namespaces) != len(api_real_namespaces):
+    if len(qq_namespaces) != len(api_namespaces):
         print("❌ namespace数量不匹配")
         return False
     
     # 比较每个namespace的实例数
     qq_stats = {ns.get('name', ''): ns.get('instance_count', 0) for ns in qq_namespaces}
-    api_stats = {ns.get('name', ''): ns.get('instance_count', 0) for ns in api_real_namespaces}
+    api_stats = {ns.get('name', ''): ns.get('instance_count', 0) for ns in api_namespaces}
     
     matches = True
     for name, qq_count in qq_stats.items():

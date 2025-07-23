@@ -74,34 +74,83 @@ function updateNamespaceSelect(namespaces) {
     
     select.innerHTML = '';
     
+    // 如果没有namespace，显示提示
+    if (namespaces.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = '没有可用的namespace';
+        option.disabled = true;
+        select.appendChild(option);
+        return;
+    }
+    
+    // 添加实际的namespace选项
     namespaces.forEach(ns => {
         const option = document.createElement('option');
         option.value = ns.name;
         
         // 使用display_name和instance_count
-        const displayName = ns.display_name || ns.name || '全部';
+        const displayName = ns.display_name || ns.name || 'unknown';
         const instanceCount = ns.instance_count || 0;
         option.textContent = `${displayName} (${instanceCount})`;
         
-        if (ns.name === currentNamespace) {
-            option.selected = true;
-        }
         select.appendChild(option);
     });
     
-    // 如果当前选择的namespace不存在，重置为空（全部）
-    const namespaceNames = namespaces.map(ns => ns.name);
-    if (currentNamespace && !namespaceNames.includes(currentNamespace)) {
-        console.log(`当前namespace "${currentNamespace}" 不存在，重置为全部`);
-        currentNamespace = '';
-        window.currentNamespace = '';
-        storeNamespace('');
+    // 设置默认选择的namespace
+    setDefaultNamespace(namespaces);
+}
+
+/**
+ * 设置默认选择的namespace
+ */
+function setDefaultNamespace(namespaces) {
+    const select = document.getElementById('currentNamespaceSelect');
+    if (!select || namespaces.length === 0) return;
+    
+    // 优先级：存储的namespace > default > 第一个有实例的namespace > 第一个namespace
+    let targetNamespace = null;
+    
+    // 1. 检查存储的namespace是否仍然存在
+    const storedNamespace = getStoredNamespace();
+    if (storedNamespace) {
+        const found = namespaces.find(ns => ns.name === storedNamespace);
+        if (found) {
+            targetNamespace = storedNamespace;
+        }
+    }
+    
+    // 2. 如果没有存储的或存储的不存在，尝试选择default
+    if (!targetNamespace) {
+        const defaultNs = namespaces.find(ns => ns.name === 'default');
+        if (defaultNs) {
+            targetNamespace = 'default';
+        }
+    }
+    
+    // 3. 如果没有default，选择第一个有实例的namespace
+    if (!targetNamespace) {
+        const activeNs = namespaces.find(ns => ns.instance_count > 0);
+        if (activeNs) {
+            targetNamespace = activeNs.name;
+        }
+    }
+    
+    // 4. 最后选择第一个namespace
+    if (!targetNamespace && namespaces.length > 0) {
+        targetNamespace = namespaces[0].name;
+    }
+    
+    // 应用选择
+    if (targetNamespace !== null) {
+        currentNamespace = targetNamespace;
+        window.currentNamespace = currentNamespace;
+        storeNamespace(currentNamespace);
         
         // 更新选择器
-        const allOption = select.querySelector('option[value=""]');
-        if (allOption) {
-            allOption.selected = true;
-        }
+        select.value = targetNamespace;
+        
+        console.log(`设置默认namespace: ${targetNamespace}`);
     }
 }
 
@@ -133,8 +182,8 @@ function switchNamespace() {
  * 显示namespace切换通知
  */
 function showNamespaceSwitchNotification(oldNs, newNs) {
-    const oldName = oldNs || '全部';
-    const newName = newNs || '全部';
+    const oldName = oldNs || '(未选择)';
+    const newName = newNs || '(未选择)';
     
     if (typeof showNotification === 'function') {
         showNotification(`已切换到 ${newName} namespace`, 'info');
@@ -255,7 +304,7 @@ function refreshOtherComponents() {
 function updateChatStatus() {
     const statusElement = document.getElementById('chatStatus');
     if (statusElement) {
-        const nsName = currentNamespace || '全部';
+        const nsName = currentNamespace || '(未选择)';
         statusElement.textContent = `当前namespace: ${nsName}`;
     }
 }
@@ -264,7 +313,7 @@ function updateChatStatus() {
  * 更新页面标题
  */
 function updatePageTitle() {
-    const nsName = currentNamespace || '全部';
+    const nsName = currentNamespace || '(未选择)';
     const titleElement = document.querySelector('title');
     if (titleElement) {
         const baseTitle = 'Q Chat Manager';
@@ -369,8 +418,11 @@ function loadInstancesWithNamespace() {
                 filteredInstances = allInstances.filter(instance => 
                     instance.namespace === currentNamespace
                 );
+            } else {
+                // 如果currentNamespace为空，可能是初始化状态，显示所有实例
+                // 但由于我们移除了"全部"选项，这种情况应该很少发生
+                console.warn('当前namespace为空，显示所有实例');
             }
-            // 如果currentNamespace为空，显示所有实例（包括没有namespace的）
             
             updateInstancesList(filteredInstances);
         })
