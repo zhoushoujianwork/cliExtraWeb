@@ -2046,14 +2046,23 @@ async function createInstanceFromModal() {
             requestData.name = name;
         }
         
+        // 创建超时控制器，设置2分钟超时
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+            controller.abort();
+            showNotification('创建实例超时，请检查网络连接或重试', 'error');
+        }, 120000); // 2分钟超时
+        
         const response = await fetch('/api/start-with-config', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(requestData)
+            body: JSON.stringify(requestData),
+            signal: controller.signal
         });
         
+        clearTimeout(timeoutId);
         const result = await response.json();
         
         if (result.success) {

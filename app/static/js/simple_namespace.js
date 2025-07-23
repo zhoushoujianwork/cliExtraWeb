@@ -175,6 +175,11 @@ function switchNamespace() {
         
         // 执行全面的页面刷新
         refreshAllPageComponents();
+        
+        // 在刷新完成后，尝试自动恢复新namespace的实例选择
+        setTimeout(() => {
+            autoRestoreNamespaceInstance(currentNamespace);
+        }, 1000);
     }
 }
 
@@ -209,6 +214,11 @@ function refreshAllPageComponents() {
     
     // 4. 刷新其他UI组件
     refreshOtherComponents();
+
+    // 5. 输出终端的监控实例对象
+    if (typeof window.terminalMemory === 'object') {
+        console.log('终端的监控实例对象:', window.terminalMemory);
+    }
     
     console.log('页面组件刷新完成');
 }
@@ -432,6 +442,10 @@ function loadInstancesWithNamespace() {
  * 更新实例列表显示
  */
 function updateInstancesList(instances) {
+    console.log('🔄 [DEBUG] updateInstancesList 开始');
+    console.log('🔍 [DEBUG] instances数量:', instances.length);
+    console.log('🔍 [DEBUG] 当前namespace:', currentNamespace);
+    
     const instancesList = document.getElementById('instancesList');
     if (!instancesList) return;
     
@@ -480,17 +494,29 @@ function updateInstancesList(instances) {
         updateAvailableInstances(instances);
     }
     
-    // 尝试自动恢复上次选择的实例
-    if (window.terminalMemory) {
-        window.terminalMemory.autoRestoreTerminalSelection(instances, (instanceId) => {
-            console.log('🔄 自动恢复终端监控:', instanceId);
-            // 只有在监控函数存在时才调用
-            if (typeof startMonitoring === 'function') {
-                startMonitoring(instanceId);
-            } else {
-                console.log('⚠️ startMonitoring 函数不可用，跳过自动恢复');
-            }
-        });
+    // 尝试自动恢复当前namespace的上次选择的实例
+    console.log('🔄 [DEBUG] 准备自动恢复实例选择');
+    console.log('🔍 [DEBUG] window.terminalMemory存在:', !!window.terminalMemory);
+    console.log('🔍 [DEBUG] currentNamespace:', currentNamespace);
+    
+    if (window.terminalMemory && currentNamespace) {
+        const result = window.terminalMemory.autoRestoreTerminalSelection(
+            instances,
+            (instanceId) => {
+                console.log('🔄 自动恢复终端监控回调执行:', instanceId, 'namespace:', currentNamespace);
+                // 只有在监控函数存在时才调用
+                if (typeof startMonitoring === 'function') {
+                    console.log('✅ [DEBUG] 调用startMonitoring:', instanceId);
+                    startMonitoring(instanceId);
+                } else {
+                    console.log('⚠️ startMonitoring 函数不可用，跳过自动恢复');
+                }
+            },
+            currentNamespace // 传入当前namespace
+        );
+        console.log('🔍 [DEBUG] updateInstancesList中的autoRestore返回:', result);
+    } else {
+        console.log('❌ [DEBUG] 自动恢复条件不满足');
     }
 }
 
@@ -499,13 +525,21 @@ function updateInstancesList(instances) {
  * @param {string} instanceId - 实例ID
  */
 function startMonitoringWithMemory(instanceId) {
+    console.log('🔄 [DEBUG] startMonitoringWithMemory 调用');
+    console.log('🔍 [DEBUG] 参数 instanceId:', instanceId);
+    console.log('🔍 [DEBUG] 当前namespace:', currentNamespace);
+    
     // 保存用户选择
     if (window.terminalMemory) {
         window.terminalMemory.saveLastSelectedInstance(instanceId, currentNamespace || 'default');
+        console.log('✅ [DEBUG] 已保存实例选择到memory');
+    } else {
+        console.log('❌ [DEBUG] window.terminalMemory 不存在');
     }
     
     // 开始监控（只有在监控函数存在时才调用）
     if (typeof startMonitoring === 'function') {
+        console.log('✅ [DEBUG] 调用startMonitoring');
         startMonitoring(instanceId);
     } else {
         console.log('⚠️ startMonitoring 函数不可用，仅保存选择记录');
@@ -526,6 +560,54 @@ function showNamespaceManageModal() {
     }`;
     
     alert(message);
+}
+
+/**
+ * 自动恢复指定namespace的实例选择
+ * @param {string} namespace - 要恢复的namespace
+ */
+function autoRestoreNamespaceInstance(namespace) {
+    console.log('🔄 [DEBUG] autoRestoreNamespaceInstance 开始');
+    console.log('🔍 [DEBUG] 参数 namespace:', namespace);
+    console.log('🔍 [DEBUG] window.terminalMemory存在:', !!window.terminalMemory);
+    
+    if (!window.terminalMemory || !namespace) {
+        console.log('❌ [DEBUG] 条件不满足，退出恢复');
+        return;
+    }
+    
+    console.log('🔄 尝试自动恢复namespace实例选择:', namespace);
+    console.log('🔍 [DEBUG] allInstances数量:', allInstances.length);
+    console.log('🔍 [DEBUG] allInstances:', allInstances.map(i => `${i.id}(${i.namespace})`));
+    
+    // 获取当前namespace的实例列表
+    const filteredInstances = allInstances.filter(instance => 
+        instance.namespace === namespace
+    );
+    
+    console.log('🔍 [DEBUG] filteredInstances数量:', filteredInstances.length);
+    console.log('🔍 [DEBUG] filteredInstances:', filteredInstances.map(i => i.id));
+    
+    if (filteredInstances.length > 0) {
+        // 使用新的带namespace参数的恢复方法
+        const result = window.terminalMemory.autoRestoreTerminalSelection(
+            filteredInstances,
+            (instanceId) => {
+                console.log('🔄 自动恢复namespace终端监控回调执行:', instanceId, 'namespace:', namespace);
+                // 只有在监控函数存在时才调用
+                if (typeof startMonitoring === 'function') {
+                    console.log('✅ [DEBUG] 调用startMonitoring:', instanceId);
+                    startMonitoring(instanceId);
+                } else {
+                    console.log('⚠️ startMonitoring 函数不可用，跳过自动恢复');
+                }
+            },
+            namespace // 传入namespace参数
+        );
+        console.log('🔍 [DEBUG] autoRestoreTerminalSelection 返回:', result);
+    } else {
+        console.log('⚠️ 当前namespace没有可用实例:', namespace);
+    }
 }
 
 // 页面加载时初始化

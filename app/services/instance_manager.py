@@ -784,12 +784,16 @@ class InstanceManager:
                         cmd.extend(['--tool', tool])
                 
                 logger.info(f'启动cliExtra实例，命令: {" ".join(cmd)}')
+                start_time = time.time()
                 
-                # 同步启动实例
+                # 同步启动实例，增加超时时间到120秒
                 result = subprocess.run(
                     cmd,
-                    capture_output=True, text=True, timeout=60
+                    capture_output=True, text=True, timeout=120
                 )
+                
+                end_time = time.time()
+                logger.info(f'cliExtra命令执行完成，耗时: {end_time - start_time:.2f}秒')
                 
                 if result.returncode != 0:
                     error_msg = f'启动cliExtra实例失败: {result.stderr}'
@@ -825,7 +829,7 @@ class InstanceManager:
                 }
                 
         except subprocess.TimeoutExpired:
-            error_msg = '创建实例超时（60秒）'
+            error_msg = '创建实例超时（120秒）'
             logger.error(error_msg)
             return {'success': False, 'error': error_msg}
         except Exception as e:
