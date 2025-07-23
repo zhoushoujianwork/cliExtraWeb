@@ -261,8 +261,8 @@ class ContentFilter:
             r'^=+$',                            # 等号分隔符
             r'^-+$',                            # 减号分隔符
             r'^\[.*\]$',                        # 方括号包围的系统信息
-            r'^Thinking\.\.\.',                 # Thinking...
-            r'^Loading\.\.\.',                  # Loading...
+            r'Thinking\.\.\.',                  # Thinking... (完全匹配)
+            r'Loading\.\.\.',                   # Loading... (完全匹配)
             r'^\d{4}-\d{2}-\d{2}',             # 日期格式
             r'^\d{2}:\d{2}:\d{2}',             # 时间格式
             r'^[>!>]\s*',                       # 新的发言者标识

@@ -20,11 +20,13 @@ def create_app(config_class=Config):
     from app.views.api import bp as api_bp
     from app.views.websocket import bp as ws_bp
     from app.views.workflow_api import bp as workflow_api_bp
+    from app.views.terminal_api import bp as terminal_api_bp
     
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(ws_bp)
     app.register_blueprint(workflow_api_bp)
+    app.register_blueprint(terminal_api_bp)
     
     # 应用启动时同步tmux实例
     with app.app_context():
