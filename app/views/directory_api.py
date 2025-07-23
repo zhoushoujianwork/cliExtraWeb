@@ -4,10 +4,130 @@
 
 import os
 import json
+import subprocess
+import logging
 from pathlib import Path
 from flask import Blueprint, request, jsonify
 
+logger = logging.getLogger(__name__)
+
 directory_bp = Blueprint('directory', __name__)
+
+@directory_bp.route('/api/directory/select', methods=['POST'])
+def select_directory():
+    """打开系统目录选择对话框"""
+    try:
+        # 使用AppleScript在macOS上打开目录选择对话框
+        applescript = '''
+        tell application "System Events"
+            set selectedFolder to choose folder with prompt "选择项目目录"
+            return POSIX path of selectedFolder
+        end tell
+        '''
+        
+        result = subprocess.run(
+            ['osascript', '-e', applescript],
+            capture_output=True, text=True, timeout=30
+        )
+        
+        if result.returncode == 0:
+            selected_path = result.stdout.strip()
+            
+            # 验证路径是否存在
+            if os.path.exists(selected_path) and os.path.isdir(selected_path):
+                # 获取绝对路径
+                abs_path = os.path.abspath(selected_path)
+                
+                return jsonify({
+                    'success': True,
+                    'path': abs_path,
+                    'directory_name': os.path.basename(abs_path),
+                    'parent_path': os.path.dirname(abs_path)
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': '选择的路径不存在或不是目录'
+                }), 400
+        else:
+            # 用户取消或出错
+            error_msg = result.stderr.strip() if result.stderr else '用户取消选择'
+            return jsonify({
+                'success': False,
+                'error': error_msg,
+                'cancelled': True
+            }), 400
+            
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            'success': False,
+            'error': '目录选择超时'
+        }), 500
+    except Exception as e:
+        logger.error(f'目录选择失败: {e}')
+        return jsonify({
+            'success': False,
+            'error': f'目录选择失败: {str(e)}'
+        }), 500
+
+@directory_bp.route('/api/directory/validate', methods=['POST'])
+def validate_directory():
+    """验证目录路径并返回绝对路径"""
+    try:
+        data = request.get_json()
+        path = data.get('path', '').strip()
+        
+        if not path:
+            return jsonify({
+                'success': False,
+                'error': '路径不能为空'
+            }), 400
+        
+        # 展开用户目录符号
+        expanded_path = os.path.expanduser(path)
+        
+        # 获取绝对路径
+        abs_path = os.path.abspath(expanded_path)
+        
+        # 检查路径是否存在
+        if not os.path.exists(abs_path):
+            return jsonify({
+                'success': False,
+                'error': f'路径不存在: {abs_path}',
+                'suggested_path': abs_path
+            }), 400
+        
+        # 检查是否是目录
+        if not os.path.isdir(abs_path):
+            return jsonify({
+                'success': False,
+                'error': f'路径不是目录: {abs_path}',
+                'suggested_path': abs_path
+            }), 400
+        
+        # 检查是否可读
+        if not os.access(abs_path, os.R_OK):
+            return jsonify({
+                'success': False,
+                'error': f'目录不可读: {abs_path}',
+                'suggested_path': abs_path
+            }), 400
+        
+        return jsonify({
+            'success': True,
+            'path': abs_path,
+            'directory_name': os.path.basename(abs_path),
+            'parent_path': os.path.dirname(abs_path),
+            'exists': True,
+            'readable': True
+        })
+        
+    except Exception as e:
+        logger.error(f'验证目录失败: {e}')
+        return jsonify({
+            'success': False,
+            'error': f'验证目录失败: {str(e)}'
+        }), 500
 
 @directory_bp.route('/api/browse-directory', methods=['POST'])
 def browse_directory():

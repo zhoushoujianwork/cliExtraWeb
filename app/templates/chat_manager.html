@@ -1078,6 +1078,48 @@ document.addEventListener('DOMContentLoaded', function() {
         gitPathRadio.addEventListener('change', updatePathHelpText);
     }
     
+    // 添加路径输入框的实时验证
+    const pathInput = document.getElementById('instancePath');
+    if (pathInput) {
+        // 防抖处理，避免频繁验证
+        let validateTimeout;
+        
+        pathInput.addEventListener('input', function() {
+            // 清除之前的定时器
+            if (validateTimeout) {
+                clearTimeout(validateTimeout);
+            }
+            
+            // 移除之前的验证样式
+            pathInput.classList.remove('is-valid', 'is-invalid');
+            
+            // 如果输入为空，不进行验证
+            if (!pathInput.value.trim()) {
+                return;
+            }
+            
+            // 延迟验证，避免频繁请求
+            validateTimeout = setTimeout(() => {
+                const isLocal = document.getElementById('localPath').checked;
+                if (isLocal) {
+                    validatePath();
+                }
+            }, 1000); // 1秒后验证
+        });
+        
+        // 失去焦点时立即验证
+        pathInput.addEventListener('blur', function() {
+            if (validateTimeout) {
+                clearTimeout(validateTimeout);
+            }
+            
+            const isLocal = document.getElementById('localPath').checked;
+            if (isLocal && pathInput.value.trim()) {
+                validatePath();
+            }
+        });
+    }
+    
     // namespace管理器会自动加载实例
     // 定期刷新实例列表
     setInterval(() => {
@@ -1257,44 +1299,110 @@ async function validatePath(path, isLocal) {
 // 浏览本地路径
 async function browsePath() {
     try {
-        // 使用HTML5 File API的目录选择功能
-        if ('showDirectoryPicker' in window) {
-            // 现代浏览器支持目录选择
-            const dirHandle = await window.showDirectoryPicker();
-            const pathInput = document.getElementById('instancePath');
-            
-            // 构建路径字符串
-            let fullPath = dirHandle.name;
-            
-            // 尝试获取完整路径（如果浏览器支持）
-            if (dirHandle.resolve) {
-                try {
-                    const pathSegments = await dirHandle.resolve();
-                    if (pathSegments && pathSegments.length > 0) {
-                        fullPath = '/' + pathSegments.join('/');
-                    }
-                } catch (e) {
-                    console.log('无法获取完整路径，使用目录名:', e);
-                }
+        const pathInput = document.getElementById('instancePath');
+        
+        // 显示加载状态
+        const browseBtn = document.getElementById('browsePathBtn');
+        const originalBtnContent = browseBtn.innerHTML;
+        browseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 选择中...';
+        browseBtn.disabled = true;
+        
+        // 调用后端API打开目录选择对话框
+        const response = await fetch('/api/directory/select', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
             }
-            
-            pathInput.value = fullPath;
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // 设置完整的绝对路径
+            pathInput.value = result.path;
             
             // 显示成功提示
-            showNotification(`已选择目录: ${dirHandle.name}`, 'success');
+            showNotification(`已选择目录: ${result.directory_name}`, 'success');
+            
+            // 自动验证路径
+            await validatePath();
             
         } else {
-            // 降级方案：显示手动输入提示
-            showDirectoryInputHelper();
+            if (result.cancelled) {
+                // 用户取消选择，不显示错误
+                console.log('用户取消了目录选择');
+            } else {
+                // 显示错误信息
+                showNotification(`选择目录失败: ${result.error}`, 'error');
+            }
         }
+        
     } catch (error) {
-        if (error.name === 'AbortError') {
-            // 用户取消选择
-            console.log('用户取消了目录选择');
-        } else {
-            console.error('浏览目录失败:', error);
-            showDirectoryInputHelper();
+        console.error('浏览目录失败:', error);
+        showNotification('浏览目录失败: ' + error.message, 'error');
+        
+        // 降级方案：显示手动输入提示
+        showDirectoryInputHelper();
+        
+    } finally {
+        // 恢复按钮状态
+        const browseBtn = document.getElementById('browsePathBtn');
+        if (browseBtn) {
+            browseBtn.innerHTML = originalBtnContent;
+            browseBtn.disabled = false;
         }
+    }
+}
+
+// 验证路径并自动转换为绝对路径
+async function validatePath() {
+    const pathInput = document.getElementById('instancePath');
+    const path = pathInput.value.trim();
+    
+    if (!path) return;
+    
+    try {
+        const response = await fetch('/api/directory/validate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ path: path })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // 如果输入的不是绝对路径，自动更新为绝对路径
+            if (pathInput.value !== result.path) {
+                pathInput.value = result.path;
+                showNotification('路径已转换为绝对路径', 'info');
+            }
+            
+            // 移除错误样式
+            pathInput.classList.remove('is-invalid');
+            pathInput.classList.add('is-valid');
+            
+        } else {
+            // 显示错误样式
+            pathInput.classList.remove('is-valid');
+            pathInput.classList.add('is-invalid');
+            
+            // 如果有建议路径，可以选择使用
+            if (result.suggested_path && result.suggested_path !== path) {
+                const useAbsPath = confirm(`路径验证失败: ${result.error}\n\n是否使用绝对路径: ${result.suggested_path}?`);
+                if (useAbsPath) {
+                    pathInput.value = result.suggested_path;
+                    // 重新验证
+                    setTimeout(() => validatePath(), 100);
+                }
+            }
+        }
+        
+    } catch (error) {
+        console.error('验证路径失败:', error);
+        pathInput.classList.remove('is-valid');
+        pathInput.classList.add('is-invalid');
     }
 }
 
