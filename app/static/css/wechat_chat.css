@@ -1,76 +1,105 @@
 /**
- * 真正的微信风格聊天界面样式
- * 完全仿照微信的设计风格
+ * 现代微信风格聊天界面样式
+ * 完全仿照微信的设计风格，更加现代化
  */
 
 /* 聊天容器 */
 .wechat-chat-container {
-    background-color: #EDEDED;
-    padding: 10px;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    padding: 16px;
     border-radius: 0;
     max-height: 500px;
     overflow-y: auto;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-    font-size: 16px;
+    font-size: 15px;
+    position: relative;
 }
 
 /* 消息项 */
 .wechat-message-item {
-    margin-bottom: 15px;
-    animation: messageSlideIn 0.2s ease-out;
+    margin-bottom: 20px;
+    animation: messageSlideIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    opacity: 0;
+    animation-fill-mode: forwards;
 }
 
 /* 消息布局 */
 .message-layout {
     display: flex;
-    align-items: flex-start;
-    gap: 10px;
+    align-items: flex-end;
+    gap: 12px;
+    max-width: 85%;
 }
 
 /* 用户消息布局 - 右对齐 */
 .user-layout {
     flex-direction: row-reverse;
+    margin-left: auto;
 }
 
 /* AI消息布局 - 左对齐 */
 .assistant-layout {
     flex-direction: row;
+    margin-right: auto;
 }
 
 /* 头像容器 */
 .message-avatar {
     flex-shrink: 0;
+    position: relative;
 }
 
 .avatar-container {
-    width: 40px;
-    height: 40px;
-    border-radius: 4px;
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    transition: transform 0.2s ease;
+}
+
+.avatar-container:hover {
+    transform: scale(1.05);
 }
 
 .avatar-emoji {
-    font-size: 20px;
+    font-size: 22px;
     line-height: 1;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+}
+
+/* 用户头像样式 */
+.user-avatar .avatar-container {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+/* AI助手头像样式 */
+.assistant-avatar .avatar-container {
+    background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
 }
 
 /* 消息内容区域 */
 .message-content-area {
     max-width: calc(100% - 60px);
     min-width: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 /* 消息信息 */
 .message-info {
-    margin-bottom: 5px;
-    font-size: 12px;
-    color: #999999;
+    margin-bottom: 6px;
+    font-size: 11px;
+    color: #8e8e93;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    font-weight: 500;
 }
 
 .user-layout .message-info {
@@ -79,12 +108,18 @@
 }
 
 .sender-name {
-    font-weight: normal;
+    font-weight: 600;
+    color: #007aff;
+}
+
+.user-layout .sender-name {
+    color: #34c759;
 }
 
 .message-time {
-    font-size: 11px;
-    color: #B3B3B3;
+    font-size: 10px;
+    color: #c7c7cc;
+    font-weight: 400;
 }
 
 /* 消息气泡 */
@@ -94,31 +129,67 @@
     max-width: 100%;
     word-wrap: break-word;
     word-break: break-word;
+    backdrop-filter: blur(10px);
+    transition: all 0.2s ease;
+}
+
+.message-bubble:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
 }
 
 /* 用户消息气泡 */
 .user-bubble {
-    background-color: #95EC69;
-    border-radius: 8px;
-    padding: 8px 12px;
-    color: #000000;
-    margin-left: 10px;
+    background: linear-gradient(135deg, #007aff 0%, #5856d6 100%);
+    border-radius: 20px 20px 6px 20px;
+    padding: 12px 16px;
+    color: #ffffff;
+    box-shadow: 0 2px 12px rgba(0, 122, 255, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.user-bubble::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+    pointer-events: none;
 }
 
 /* AI消息气泡 */
 .assistant-bubble {
-    background-color: #FFFFFF;
-    border-radius: 8px;
-    padding: 8px 12px;
-    color: #000000;
-    margin-right: 10px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px 20px 20px 6px;
+    padding: 12px 16px;
+    color: #1d1d1f;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    border: 1px solid rgba(0,0,0,0.05);
+    backdrop-filter: blur(20px);
+    position: relative;
+    overflow: hidden;
+}
+
+.assistant-bubble::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.01) 100%);
+    pointer-events: none;
 }
 
 /* 气泡内容 */
 .bubble-content {
-    line-height: 1.4;
-    font-size: 16px;
+    line-height: 1.5;
+    font-size: 15px;
+    position: relative;
+    z-index: 1;
 }
 
 .bubble-content p {
@@ -129,37 +200,43 @@
     margin-bottom: 0;
 }
 
-/* 气泡尖角 */
+/* 气泡尖角 - 使用更现代的设计 */
 .bubble-tail {
     position: absolute;
     width: 0;
     height: 0;
-    top: 12px;
+    z-index: 0;
 }
 
 .user-tail {
-    right: -6px;
-    border-left: 6px solid #95EC69;
-    border-top: 6px solid transparent;
-    border-bottom: 6px solid transparent;
+    right: -8px;
+    bottom: 8px;
+    border-left: 8px solid #007aff;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    filter: drop-shadow(2px 0 4px rgba(0, 122, 255, 0.2));
 }
 
 .assistant-tail {
-    left: -6px;
-    border-right: 6px solid #FFFFFF;
-    border-top: 6px solid transparent;
-    border-bottom: 6px solid transparent;
+    left: -8px;
+    bottom: 8px;
+    border-right: 8px solid rgba(255, 255, 255, 0.95);
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    filter: drop-shadow(-2px 0 4px rgba(0,0,0,0.1));
 }
 
 /* 消息操作 */
 .message-actions {
-    margin-top: 5px;
+    margin-top: 8px;
     opacity: 0;
-    transition: opacity 0.2s ease;
+    transition: all 0.3s ease;
+    transform: translateY(5px);
 }
 
 .wechat-message-item:hover .message-actions {
     opacity: 1;
+    transform: translateY(0);
 }
 
 .user-layout .message-actions {
@@ -167,100 +244,129 @@
 }
 
 .action-copy {
-    background: none;
+    background: rgba(0,0,0,0.1);
     border: none;
-    color: #576B95;
-    font-size: 12px;
+    color: #007aff;
+    font-size: 11px;
     cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 3px;
-    transition: background-color 0.2s ease;
+    padding: 4px 8px;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    font-weight: 500;
 }
 
 .action-copy:hover {
-    background-color: rgba(87, 107, 149, 0.1);
+    background: rgba(0, 122, 255, 0.1);
+    transform: scale(1.05);
 }
 
 /* 系统消息 */
 .wechat-system-message {
     text-align: center;
-    margin: 20px 0;
+    margin: 24px 0;
 }
 
 .system-message-content {
     display: inline-block;
-    background-color: rgba(0,0,0,0.05);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    color: #999999;
+    background: rgba(0,0,0,0.08);
+    backdrop-filter: blur(10px);
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 11px;
+    color: #8e8e93;
+    font-weight: 500;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
 
 .system-time {
     margin-right: 6px;
+    color: #c7c7cc;
 }
 
 /* 代码块样式 */
 .bubble-content pre {
-    background-color: #F5F5F5;
-    border-radius: 4px;
-    padding: 8px;
-    margin: 8px 0;
-    font-size: 14px;
+    background: rgba(0,0,0,0.08);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 10px 0;
+    font-size: 13px;
     overflow-x: auto;
-    border: 1px solid #E5E5E5;
+    border: 1px solid rgba(0,0,0,0.1);
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    backdrop-filter: blur(10px);
 }
 
 .user-bubble pre {
-    background-color: rgba(0,0,0,0.1);
-    border-color: rgba(0,0,0,0.1);
+    background: rgba(255,255,255,0.2);
+    border-color: rgba(255,255,255,0.3);
+    color: rgba(255,255,255,0.95);
 }
 
 .bubble-content code {
-    background-color: #F5F5F5;
-    padding: 2px 4px;
-    border-radius: 3px;
-    font-size: 14px;
-    border: 1px solid #E5E5E5;
+    background: rgba(0,0,0,0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    border: 1px solid rgba(0,0,0,0.1);
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
 }
 
 .user-bubble code {
-    background-color: rgba(0,0,0,0.1);
-    border-color: rgba(0,0,0,0.1);
+    background: rgba(255,255,255,0.2);
+    border-color: rgba(255,255,255,0.3);
+    color: rgba(255,255,255,0.95);
 }
 
 /* 链接样式 */
 .bubble-content a {
-    color: #576B95;
+    color: #007aff;
     text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s ease;
 }
 
 .bubble-content a:hover {
     text-decoration: underline;
+    color: #0051d5;
+}
+
+.user-bubble a {
+    color: rgba(255,255,255,0.9);
+}
+
+.user-bubble a:hover {
+    color: rgba(255,255,255,1);
 }
 
 /* 空状态 */
 .wechat-empty-state {
     text-align: center;
-    padding: 80px 20px;
-    color: #999999;
+    padding: 100px 20px;
+    color: #8e8e93;
 }
 
 .empty-icon {
-    font-size: 60px;
-    margin-bottom: 20px;
-    opacity: 0.5;
+    font-size: 72px;
+    margin-bottom: 24px;
+    opacity: 0.3;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .empty-text {
-    font-size: 18px;
-    margin-bottom: 8px;
-    color: #666666;
+    font-size: 20px;
+    margin-bottom: 12px;
+    color: #1d1d1f;
+    font-weight: 600;
 }
 
 .empty-subtext {
-    font-size: 14px;
-    color: #999999;
+    font-size: 15px;
+    color: #8e8e93;
+    font-weight: 400;
 }
 
 /* 复制成功提示 */
@@ -269,33 +375,38 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background-color: rgba(0,0,0,0.7);
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(20px);
     color: white;
-    padding: 10px 20px;
-    border-radius: 6px;
-    font-size: 16px;
+    padding: 12px 24px;
+    border-radius: 20px;
+    font-size: 15px;
     z-index: 9999;
-    animation: fadeInOut 1.5s ease;
+    animation: fadeInOut 2s ease;
+    font-weight: 500;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 
 /* 动画效果 */
 @keyframes messageSlideIn {
     from {
         opacity: 0;
-        transform: translateY(5px);
+        transform: translateY(20px) scale(0.95);
     }
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
     }
 }
 
 @keyframes fadeInOut {
     0%, 100% {
         opacity: 0;
+        transform: translate(-50%, -50%) scale(0.9);
     }
     20%, 80% {
         opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
     }
 }
 
@@ -309,23 +420,24 @@
 }
 
 .wechat-chat-container::-webkit-scrollbar-thumb {
-    background-color: rgba(0,0,0,0.2);
+    background: rgba(0,0,0,0.2);
     border-radius: 3px;
+    transition: background 0.2s ease;
 }
 
 .wechat-chat-container::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(0,0,0,0.3);
+    background: rgba(0,0,0,0.4);
 }
 
 /* 响应式设计 */
 @media (max-width: 768px) {
     .wechat-chat-container {
-        padding: 8px;
+        padding: 12px;
     }
     
     .avatar-container {
-        width: 35px;
-        height: 35px;
+        width: 36px;
+        height: 36px;
     }
     
     .avatar-emoji {
@@ -333,11 +445,17 @@
     }
     
     .message-bubble {
-        font-size: 15px;
+        font-size: 14px;
+        padding: 10px 14px;
     }
     
     .bubble-content {
-        font-size: 15px;
+        font-size: 14px;
+    }
+    
+    .message-layout {
+        max-width: 90%;
+        gap: 8px;
     }
     
     .message-content-area {
@@ -348,41 +466,50 @@
 /* 深色模式支持 */
 @media (prefers-color-scheme: dark) {
     .wechat-chat-container {
-        background-color: #1C1C1C;
+        background: linear-gradient(135deg, #1c1c1e 0%, #2c2c2e 100%);
     }
     
     .assistant-bubble {
-        background-color: #2C2C2C;
-        color: #FFFFFF;
+        background: rgba(44, 44, 46, 0.95) !important;
+        border-color: rgba(84, 84, 88, 0.3);
+        color: #ffffff !important;
     }
     
     .assistant-tail {
-        border-right-color: #2C2C2C;
+        border-right-color: rgba(44, 44, 46, 0.95);
     }
     
     .system-message-content {
-        background-color: rgba(255,255,255,0.1);
-        color: #CCCCCC;
+        background: rgba(255,255,255,0.1);
+        color: #ffffff;
     }
     
     .bubble-content pre {
-        background-color: #333333;
-        border-color: #444444;
-        color: #FFFFFF;
+        background: rgba(255,255,255,0.1);
+        border-color: rgba(255,255,255,0.2);
+        color: #ffffff;
     }
     
     .bubble-content code {
-        background-color: #333333;
-        border-color: #444444;
-        color: #FFFFFF;
+        background: rgba(255,255,255,0.1);
+        border-color: rgba(255,255,255,0.2);
+        color: #ffffff;
     }
     
     .empty-text {
-        color: #CCCCCC;
+        color: #ffffff;
     }
     
     .empty-subtext {
-        color: #999999;
+        color: #8e8e93;
+    }
+    
+    .sender-name {
+        color: #0a84ff;
+    }
+    
+    .user-layout .sender-name {
+        color: #30d158;
     }
 }
 

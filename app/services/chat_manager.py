@@ -5,7 +5,7 @@ import re
 import os
 import json
 from typing import List, Dict, Tuple
-from datetime import datetime
+from datetime import datetime, timezone, timezone
 from collections import deque
 
 from app.models.instance import ChatMessage
@@ -20,12 +20,24 @@ class ChatManager:
         self.system_logs = deque(maxlen=self.config.MAX_SYSTEM_LOGS)
         self.namespace_cache_loaded = False
     
+    def _normalize_datetime(self, dt):
+        """标准化datetime对象，确保都是UTC时区"""
+        if dt is None:
+            return datetime.now(timezone.utc)
+        
+        if dt.tzinfo is None:
+            # 如果没有时区信息，假设是UTC
+            return dt.replace(tzinfo=timezone.utc)
+        else:
+            # 如果有时区信息，转换为UTC
+            return dt.astimezone(timezone.utc)
+    
     def add_chat_message(self, sender: str, message: str, instance_id: str = None):
         """添加聊天消息并保存到持久化存储"""
         chat_msg = ChatMessage(
             sender=sender,
             message=message,
-            timestamp=datetime.now(),
+            timestamp=self._normalize_datetime(datetime.now()),
             instance_id=instance_id,
             message_type='chat'
         )
@@ -49,7 +61,7 @@ class ChatManager:
         log_msg = ChatMessage(
             sender='system',
             message=message,
-            timestamp=datetime.now(),
+            timestamp=self._normalize_datetime(datetime.now()),
             message_type='system'
         )
         self.system_logs.append(log_msg)
@@ -96,8 +108,12 @@ class ChatManager:
                         except:
                             # 如果解析失败，尝试其他格式
                             timestamp = datetime.strptime(timestamp_str.replace('Z', ''), '%Y-%m-%dT%H:%M:%S')
+                            timestamp = timestamp.replace(tzinfo=timezone.utc)
                     else:
-                        timestamp = datetime.now()
+                        timestamp = datetime.now(timezone.utc)
+                    
+                    # 标准化时间戳
+                    timestamp = self._normalize_datetime(timestamp)
                     
                     # 创建聊天消息对象
                     chat_msg = ChatMessage(
@@ -137,9 +153,14 @@ class ChatManager:
         """检查是否为重复消息"""
         for existing_msg in self.chat_history:
             if (existing_msg.instance_id == new_msg.instance_id and 
-                existing_msg.message == new_msg.message and
-                abs((existing_msg.timestamp - new_msg.timestamp).total_seconds()) < 1):
-                return True
+                existing_msg.message == new_msg.message):
+                
+                # 标准化时间戳后再比较
+                existing_time = self._normalize_datetime(existing_msg.timestamp)
+                new_time = self._normalize_datetime(new_msg.timestamp)
+                
+                if abs((existing_time - new_time).total_seconds()) < 1:
+                    return True
         return False
     
     def get_chat_history(self, limit: int = None, namespace: str = 'q_cli') -> List[Dict]:

@@ -103,8 +103,7 @@
 .chat-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 15px;
-    background: #f8f9fa;
+    padding: 0;
     /* 移除固定高度，使用flex布局自动计算 */
     min-height: 0; /* 允许flex item缩小 */
 }
@@ -196,11 +195,6 @@
 
 .suggestion-item:last-child {
     border-bottom: none !important;
-}
-
-.chat-messages {
-    max-height: calc(100vh - 300px);
-    overflow-y: auto;
 }
 
 .message-time {
@@ -302,7 +296,7 @@
                     </button>
                 </div>
             </div>
-            <div class="chat-messages" id="chatMessages">
+            <div class="chat-messages wechat-chat-container" id="chatMessages">
                 <!-- 聊天消息将通过JavaScript动态加载 -->
             </div>
             <div class="chat-input-area">

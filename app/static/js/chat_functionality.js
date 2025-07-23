@@ -139,12 +139,28 @@ function addUserMessage(message, timestamp) {
     if (!chatMessages) return;
     
     const messageDiv = document.createElement('div');
-    messageDiv.className = 'message mb-2 user-message';
+    messageDiv.className = 'wechat-message-item';
     messageDiv.innerHTML = `
-        <div class="d-flex justify-content-end">
-            <div class="message-bubble bg-primary text-white p-2 rounded">
-                <div class="message-content">${escapeHtml(message)}</div>
-                <small class="message-time opacity-75">${timestamp}</small>
+        <div class="message-layout user-layout">
+            <div class="message-avatar user-avatar">
+                <div class="avatar-container">
+                    <span class="avatar-emoji">👤</span>
+                </div>
+            </div>
+            <div class="message-content-area">
+                <div class="message-info">
+                    <span class="sender-name">我</span>
+                    <span class="message-time">${timestamp}</span>
+                </div>
+                <div class="message-bubble user-bubble">
+                    <div class="bubble-content">${escapeHtml(message)}</div>
+                    <div class="bubble-tail user-tail"></div>
+                </div>
+                <div class="message-actions">
+                    <button class="action-copy" onclick="copyMessage(this, '${escapeHtml(message).replace(/'/g, "\\'")}')">
+                        复制
+                    </button>
+                </div>
             </div>
         </div>
     `;
@@ -159,10 +175,11 @@ function addSystemMessage(message) {
     if (!chatMessages) return;
     
     const messageDiv = document.createElement('div');
-    messageDiv.className = 'message mb-2 system-message';
+    messageDiv.className = 'wechat-system-message';
     messageDiv.innerHTML = `
-        <div class="text-center">
-            <small class="text-muted bg-light px-2 py-1 rounded">${escapeHtml(message)}</small>
+        <div class="system-message-content">
+            <span class="system-time">${new Date().toLocaleTimeString()}</span>
+            <span class="system-content">${escapeHtml(message)}</span>
         </div>
     `;
     
@@ -175,16 +192,32 @@ function addInstanceMessage(instanceId, message, timestamp) {
     const chatMessages = document.getElementById('chatMessages');
     if (!chatMessages) return;
     
+    // 根据实例ID生成不同的头像
+    const avatarEmoji = getInstanceAvatar(instanceId);
+    
     const messageDiv = document.createElement('div');
-    messageDiv.className = 'message mb-2 instance-message';
+    messageDiv.className = 'wechat-message-item';
     messageDiv.innerHTML = `
-        <div class="d-flex">
-            <div class="message-bubble bg-light border p-2 rounded">
-                <div class="message-header">
-                    <strong class="text-primary">${escapeHtml(instanceId)}</strong>
-                    <small class="text-muted ms-2">${timestamp}</small>
+        <div class="message-layout assistant-layout">
+            <div class="message-avatar assistant-avatar">
+                <div class="avatar-container">
+                    <span class="avatar-emoji">${avatarEmoji}</span>
                 </div>
-                <div class="message-content mt-1">${escapeHtml(message)}</div>
+            </div>
+            <div class="message-content-area">
+                <div class="message-info">
+                    <span class="sender-name">${escapeHtml(instanceId)}</span>
+                    <span class="message-time">${timestamp}</span>
+                </div>
+                <div class="message-bubble assistant-bubble">
+                    <div class="bubble-content">${formatMessage(message)}</div>
+                    <div class="bubble-tail assistant-tail"></div>
+                </div>
+                <div class="message-actions">
+                    <button class="action-copy" onclick="copyMessage(this, '${escapeHtml(message).replace(/'/g, "\\'")}')">
+                        复制
+                    </button>
+                </div>
             </div>
         </div>
     `;
@@ -470,4 +503,73 @@ async function loadChatHistoryOnInit() {
         console.error('初始化加载聊天历史失败:', error);
         addSystemMessage('欢迎使用聊天功能！');
     }
+}
+
+// 根据实例ID生成头像
+function getInstanceAvatar(instanceId) {
+    const avatars = ['🤖', '🎯', '💡', '⚡', '🔥', '🌟', '🎨', '🔧', '📊', '🚀'];
+    const hash = instanceId.split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0);
+        return a & a;
+    }, 0);
+    return avatars[Math.abs(hash) % avatars.length];
+}
+
+// 格式化消息内容，支持代码块和链接
+function formatMessage(message) {
+    let formatted = escapeHtml(message);
+    
+    // 处理代码块
+    formatted = formatted.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+    
+    // 处理行内代码
+    formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
+    
+    // 处理链接
+    formatted = formatted.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
+    
+    // 处理换行
+    formatted = formatted.replace(/\n/g, '<br>');
+    
+    return formatted;
+}
+
+// 复制消息内容
+function copyMessage(button, message) {
+    navigator.clipboard.writeText(message).then(() => {
+        // 显示复制成功提示
+        showCopyToast();
+        
+        // 临时改变按钮文本
+        const originalText = button.textContent;
+        button.textContent = '已复制';
+        button.style.color = '#34c759';
+        
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.style.color = '';
+        }, 1000);
+    }).catch(err => {
+        console.error('复制失败:', err);
+        // 降级方案：选择文本
+        const textArea = document.createElement('textarea');
+        textArea.value = message;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showCopyToast();
+    });
+}
+
+// 显示复制成功提示
+function showCopyToast() {
+    const toast = document.createElement('div');
+    toast.className = 'wechat-copy-toast';
+    toast.textContent = '已复制到剪贴板';
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        document.body.removeChild(toast);
+    }, 2000);
 }
