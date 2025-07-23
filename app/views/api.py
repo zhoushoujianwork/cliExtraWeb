@@ -31,7 +31,15 @@ def get_instances():
             instance_manager.sync_screen_instances()
             instances = instance_manager.get_instances()
         
-        return jsonify({'success': True, 'instances': instances})
+        # 获取聊天历史
+        from app.services.chat_manager import chat_manager
+        chat_history = chat_manager.get_chat_history(limit=50, namespace=namespace or 'q_cli')
+        
+        return jsonify({
+            'success': True, 
+            'instances': instances,
+            'chat_history': chat_history
+        })
     except Exception as e:
         logger.error("获取实例列表失败: {}".format(str(e)))
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1301,6 +1309,33 @@ def create_namespace():
             
     except Exception as e:
         logger.error(f"创建 namespace 失败: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@bp.route('/chat/refresh-cache', methods=['POST'])
+def refresh_chat_cache():
+    """刷新聊天历史缓存"""
+    try:
+        data = request.get_json() or {}
+        namespace = data.get('namespace', 'q_cli')
+        
+        # 刷新缓存历史记录
+        chat_manager.refresh_cache_history(namespace)
+        
+        # 获取更新后的历史记录
+        history = chat_manager.get_chat_history(limit=50, namespace=namespace)
+        
+        return jsonify({
+            'success': True,
+            'message': '聊天历史缓存刷新成功',
+            'history': history,
+            'count': len(history)
+        })
+        
+    except Exception as e:
+        logger.error("刷新聊天历史缓存失败: {}".format(e))
         return jsonify({
             'success': False,
             'error': str(e)

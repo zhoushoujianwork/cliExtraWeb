@@ -2,6 +2,8 @@
 Chat Manager Service - 支持对话记录持久化
 """
 import re
+import os
+import json
 from typing import List, Dict, Tuple
 from datetime import datetime
 from collections import deque
@@ -16,6 +18,7 @@ class ChatManager:
         self.config = Config()
         self.chat_history = deque(maxlen=self.config.MAX_CHAT_HISTORY)
         self.system_logs = deque(maxlen=self.config.MAX_SYSTEM_LOGS)
+        self.namespace_cache_loaded = False
     
     def add_chat_message(self, sender: str, message: str, instance_id: str = None):
         """添加聊天消息并保存到持久化存储"""
@@ -39,7 +42,7 @@ class ChatManager:
             instance_manager.save_conversation_message(instance_id, sender, message)
         except Exception as e:
             # 如果保存失败，记录到系统日志但不影响主流程
-            self.add_system_log(f'保存对话记录失败: {str(e)}')
+            self.add_system_log('保存对话记录失败: {}'.format(str(e)))
     
     def add_system_log(self, message: str):
         """添加系统日志"""
@@ -51,12 +54,87 @@ class ChatManager:
         )
         self.system_logs.append(log_msg)
     
-    def get_chat_history(self, limit: int = None) -> List[Dict]:
-        """获取聊天历史"""
+    def load_namespace_cache_history(self, namespace: str = 'q_cli'):
+        """从 namespace 缓存文件加载历史记录"""
+        if self.namespace_cache_loaded:
+            return  # 避免重复加载
+            
+        try:
+            # 构建缓存文件路径
+            cache_file = os.path.expanduser(
+                '~/Library/Application Support/cliExtra/namespaces/{}/namespace_cache.json'.format(namespace)
+            )
+            
+            if not os.path.exists(cache_file):
+                self.add_system_log('Namespace 缓存文件不存在: {}'.format(cache_file))
+                return
+            
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                cache_data = json.load(f)
+            
+            # 加载消息历史
+            message_history = cache_data.get('message_history', [])
+            
+            # 转换为 ChatMessage 对象并添加到历史记录
+            loaded_count = 0
+            for msg_data in message_history:
+                try:
+                    # 解析时间戳
+                    timestamp_str = msg_data.get('timestamp', '')
+                    if timestamp_str:
+                        # 处理 ISO 格式的时间戳
+                        if timestamp_str.endswith('Z'):
+                            timestamp_str = timestamp_str[:-1] + '+00:00'
+                        timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                    else:
+                        timestamp = datetime.now()
+                    
+                    # 创建聊天消息对象
+                    chat_msg = ChatMessage(
+                        sender=msg_data.get('instance_id', 'unknown'),
+                        message=msg_data.get('message', ''),
+                        timestamp=timestamp,
+                        instance_id=msg_data.get('instance_id'),
+                        message_type='chat'
+                    )
+                    
+                    # 添加到历史记录（如果不重复）
+                    if not self._is_duplicate_message(chat_msg):
+                        self.chat_history.append(chat_msg)
+                        loaded_count += 1
+                        
+                except Exception as e:
+                    self.add_system_log('解析消息失败: {}'.format(str(e)))
+                    continue
+            
+            self.namespace_cache_loaded = True
+            self.add_system_log('从 namespace 缓存加载了 {} 条历史消息'.format(loaded_count))
+            
+        except Exception as e:
+            self.add_system_log('加载 namespace 缓存失败: {}'.format(str(e)))
+    
+    def _is_duplicate_message(self, new_msg: ChatMessage) -> bool:
+        """检查是否为重复消息"""
+        for existing_msg in self.chat_history:
+            if (existing_msg.instance_id == new_msg.instance_id and 
+                existing_msg.message == new_msg.message and
+                abs((existing_msg.timestamp - new_msg.timestamp).total_seconds()) < 1):
+                return True
+        return False
+    
+    def get_chat_history(self, limit: int = None, namespace: str = 'q_cli') -> List[Dict]:
+        """获取聊天历史，首次调用时会加载 namespace 缓存"""
+        # 首次调用时加载缓存数据
+        if not self.namespace_cache_loaded:
+            self.load_namespace_cache_history(namespace)
+        
         if limit:
             history = list(self.chat_history)[-limit:]
         else:
             history = list(self.chat_history)
+        
+        # 按时间排序
+        history.sort(key=lambda msg: msg.timestamp)
         
         return [msg.to_dict() for msg in history]
     
@@ -66,7 +144,7 @@ class ChatManager:
             from app.services.instance_manager import instance_manager
             return instance_manager.get_conversation_history(instance_id, namespace)
         except Exception as e:
-            self.add_system_log(f'获取持久化聊天历史失败: {str(e)}')
+            self.add_system_log('获取持久化聊天历史失败: {}'.format(str(e)))
             return []
     
     def get_namespace_chat_history(self, namespace: str, limit: int = 100) -> List[Dict]:
@@ -75,17 +153,8 @@ class ChatManager:
             from app.services.instance_manager import instance_manager
             return instance_manager.get_namespace_conversation_history(namespace, limit)
         except Exception as e:
-            self.add_system_log(f'获取namespace聊天历史失败: {str(e)}')
+            self.add_system_log('获取namespace聊天历史失败: {}'.format(str(e)))
             return []
-    
-    def get_chat_history(self, limit: int = None) -> List[Dict]:
-        """获取聊天历史"""
-        if limit:
-            history = list(self.chat_history)[-limit:]
-        else:
-            history = list(self.chat_history)
-        
-        return [msg.to_dict() for msg in history]
     
     def get_system_logs(self, limit: int = None) -> List[Dict]:
         """获取系统日志"""
@@ -117,10 +186,16 @@ class ChatManager:
     def clear_chat_history(self):
         """清空聊天历史"""
         self.chat_history.clear()
+        self.namespace_cache_loaded = False
     
     def clear_system_logs(self):
         """清空系统日志"""
         self.system_logs.clear()
+    
+    def refresh_cache_history(self, namespace: str = 'q_cli'):
+        """刷新缓存历史记录"""
+        self.namespace_cache_loaded = False
+        self.load_namespace_cache_history(namespace)
 
 # 全局聊天管理器
 chat_manager = ChatManager()

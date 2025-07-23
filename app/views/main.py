@@ -11,12 +11,18 @@ bp = Blueprint('main', __name__)
 @bp.route('/')
 def index():
     """主页面"""
+    # 获取 namespace 参数
+    namespace = request.args.get('namespace', 'q_cli')
+    
     instances = instance_manager.get_instances()
-    chat_history = chat_manager.get_chat_history(limit=50)
+    
+    # 加载包含 namespace 缓存的聊天历史
+    chat_history = chat_manager.get_chat_history(limit=50, namespace=namespace)
     
     return render_template('chat_manager.html', 
                          instances=instances, 
-                         chat_history=chat_history)
+                         chat_history=chat_history,
+                         current_namespace=namespace)
 
 @bp.route('/roles')
 def roles():
