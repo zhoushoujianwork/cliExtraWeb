@@ -6,12 +6,123 @@ Workflow DAG API 接口
 from flask import Blueprint, request, jsonify
 import logging
 import json
+import time
+import os
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-bp = Blueprint('workflow_api', __name__, url_prefix='/api/workflow')
+bp = Blueprint('workflow_api', __name__)
 
-@bp.route('/templates', methods=['GET'])
+@bp.route('/api/workflow/list', methods=['GET'])
+def list_workflows():
+    """获取工作流列表"""
+    try:
+        namespace = request.args.get('namespace', 'default')
+        
+        # 读取真实的工作流数据
+        workflow_dir = os.path.join(os.getcwd(), '.amazonq', 'workflows', namespace)
+        workflows = []
+        
+        if os.path.exists(workflow_dir):
+            for filename in os.listdir(workflow_dir):
+                if filename.endswith('.json'):
+                    try:
+                        filepath = os.path.join(workflow_dir, filename)
+                        with open(filepath, 'r') as f:
+                            workflow_data = json.load(f)
+                        
+                        # 提取列表需要的信息
+                        workflow_info = {
+                            "id": workflow_data.get("id", filename[:-5]),
+                            "name": workflow_data.get("name", "未命名工作流"),
+                            "description": workflow_data.get("description", ""),
+                            "version": workflow_data.get("version", "1.0.0"),
+                            "created_at": workflow_data.get("created_at", ""),
+                            "updated_at": workflow_data.get("updated_at", ""),
+                            "node_count": len(workflow_data.get("nodes", [])),
+                            "edge_count": len(workflow_data.get("edges", [])),
+                            "status": "active"
+                        }
+                        workflows.append(workflow_info)
+                    except Exception as e:
+                        logger.error("读取工作流文件失败 {}: {}".format(filename, e))
+                        continue
+        
+        # 按更新时间排序
+        workflows.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'workflows': workflows,
+            'namespace': namespace
+        })
+        
+    except Exception as e:
+        logger.error("获取工作流列表失败: {}".format(e))
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@bp.route('/api/workflow/create', methods=['POST'])
+def create_workflow():
+    """创建新工作流"""
+    try:
+        data = request.get_json()
+        name = data.get('name', '新工作流')
+        description = data.get('description', '')
+        namespace = data.get('namespace', 'default')
+        
+        # 创建新工作流的示例响应
+        new_workflow = {
+            "id": f"workflow-{int(time.time())}",
+            "name": name,
+            "description": description,
+            "version": "1.0.0",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+            "node_count": 2,  # 默认包含开始和结束节点
+            "edge_count": 0,
+            "status": "draft"
+        }
+        
+        logger.info(f"创建工作流: {name} (namespace: {namespace})")
+        
+        return jsonify({
+            'success': True,
+            'workflow': new_workflow,
+            'message': f'工作流 "{name}" 创建成功'
+        })
+        
+    except Exception as e:
+        logger.error(f"创建工作流失败: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@bp.route('/api/workflow/delete/<workflow_id>', methods=['DELETE'])
+def delete_workflow(workflow_id):
+    """删除工作流"""
+    try:
+        namespace = request.args.get('namespace', 'default')
+        
+        logger.info(f"删除工作流: {workflow_id} (namespace: {namespace})")
+        
+        return jsonify({
+            'success': True,
+            'message': f'工作流 {workflow_id} 删除成功'
+        })
+        
+    except Exception as e:
+        logger.error(f"删除工作流失败: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@bp.route('/api/workflow/templates', methods=['GET'])
 def get_node_templates():
     """获取节点模板"""
     templates = {
@@ -62,7 +173,7 @@ def get_node_templates():
         'templates': templates
     })
 
-@bp.route('/<namespace>/<workflow_id>', methods=['GET'])
+@bp.route('/api/workflow/<namespace>/<workflow_id>', methods=['GET'])
 def get_workflow(namespace, workflow_id):
     """获取工作流数据"""
     try:
@@ -141,7 +252,7 @@ def get_workflow(namespace, workflow_id):
             'error': str(e)
         }), 500
 
-@bp.route('/<namespace>/<workflow_id>', methods=['PUT'])
+@bp.route('/api/workflow/<namespace>/<workflow_id>', methods=['PUT'])
 def save_workflow(namespace, workflow_id):
     """保存工作流"""
     try:

@@ -27,7 +27,7 @@ def create_app(config_class=Config):
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(ws_bp)
-    app.register_blueprint(workflow_api_bp, url_prefix='/api/workflow')
+    app.register_blueprint(workflow_api_bp)
     app.register_blueprint(terminal_api_bp)
     app.register_blueprint(image_api_bp, url_prefix='/api')
     

@@ -1,0 +1,80 @@
+{
+  "created_at": "2025-07-23T13:23:23.704788", 
+  "version": "1.0.0", 
+  "name": "测试工作流", 
+  "updated_at": "2025-07-23T13:23:23.704801", 
+  "nodes": [
+    {
+      "status": "pending", 
+      "style": {
+        "border_color": "#059669", 
+        "background_color": "#10b981", 
+        "text_color": "#ffffff"
+      }, 
+      "description": "测试开始", 
+      "position": {
+        "y": 100, 
+        "x": 100
+      }, 
+      "type": "start", 
+      "id": "start-1", 
+      "name": "开始"
+    }, 
+    {
+      "status": "pending", 
+      "style": {
+        "border_color": "#2563eb", 
+        "background_color": "#3b82f6", 
+        "text_color": "#ffffff"
+      }, 
+      "name": "测试任务", 
+      "owner": "any", 
+      "position": {
+        "y": 100, 
+        "x": 300
+      }, 
+      "type": "task", 
+      "id": "task-1", 
+      "description": "执行测试任务"
+    }, 
+    {
+      "status": "pending", 
+      "style": {
+        "border_color": "#dc2626", 
+        "background_color": "#ef4444", 
+        "text_color": "#ffffff"
+      }, 
+      "description": "测试结束", 
+      "position": {
+        "y": 100, 
+        "x": 500
+      }, 
+      "type": "end", 
+      "id": "end-1", 
+      "name": "结束"
+    }
+  ], 
+  "created_by": "system", 
+  "id": "test-workflow", 
+  "edges": [
+    {
+      "source_node_id": "start-1", 
+      "style": {
+        "color": "#6b7280", 
+        "width": 2
+      }, 
+      "target_node_id": "task-1", 
+      "id": "edge-1"
+    }, 
+    {
+      "source_node_id": "task-1", 
+      "style": {
+        "color": "#6b7280", 
+        "width": 2
+      }, 
+      "target_node_id": "end-1", 
+      "id": "edge-2"
+    }
+  ], 
+  "description": "用于测试的简单工作流"
+}

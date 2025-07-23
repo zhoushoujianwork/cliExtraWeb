@@ -1,0 +1,370 @@
+{
+  "project_name": "cliExtra", 
+  "name": "默认开发流程", 
+  "repository": "https://github.com/zhoushoujianwork/cliExtra.git", 
+  "collaboration_rules": [
+    {
+      "priority": "high", 
+      "to_role": "frontend-engineer", 
+      "from_role": "devops-engineer", 
+      "trigger": "CLI功能更新", 
+      "message_template": "CLI功能已更新，请适配Web界面", 
+      "auto_execute": true, 
+      "action": "通知Web界面适配", 
+      "id": "collab-1"
+    }
+  ], 
+  "created_at": "2025-07-23T13:23:23.700675", 
+  "created_by": "system", 
+  "updated_at": "2025-07-23T13:23:23.701331", 
+  "edges": [
+    {
+      "style": {
+        "color": "#6b7280", 
+        "width": 2
+      }, 
+      "source_handle": "output", 
+      "label": "", 
+      "target_node_id": "task-1", 
+      "source_node_id": "start-1", 
+      "target_handle": "input", 
+      "id": "edge-1"
+    }, 
+    {
+      "style": {
+        "color": "#6b7280", 
+        "width": 2
+      }, 
+      "source_handle": "output", 
+      "label": "", 
+      "target_node_id": "task-2", 
+      "source_node_id": "task-1", 
+      "target_handle": "input", 
+      "id": "edge-2"
+    }, 
+    {
+      "style": {
+        "color": "#6b7280", 
+        "width": 2
+      }, 
+      "source_handle": "output", 
+      "label": "", 
+      "target_node_id": "parallel-1", 
+      "source_node_id": "task-2", 
+      "target_handle": "input", 
+      "id": "edge-3"
+    }, 
+    {
+      "style": {
+        "color": "#3b82f6", 
+        "width": 2
+      }, 
+      "source_handle": "output", 
+      "label": "CLI分支", 
+      "target_node_id": "task-3", 
+      "source_node_id": "parallel-1", 
+      "target_handle": "input", 
+      "id": "edge-4"
+    }, 
+    {
+      "style": {
+        "color": "#10b981", 
+        "width": 2
+      }, 
+      "source_handle": "output", 
+      "label": "Web分支", 
+      "target_node_id": "task-4", 
+      "source_node_id": "parallel-1", 
+      "target_handle": "input", 
+      "id": "edge-5"
+    }, 
+    {
+      "style": {
+        "color": "#6b7280", 
+        "width": 2
+      }, 
+      "source_handle": "output", 
+      "label": "", 
+      "target_node_id": "task-5", 
+      "source_node_id": "task-3", 
+      "target_handle": "input", 
+      "id": "edge-6"
+    }, 
+    {
+      "style": {
+        "color": "#6b7280", 
+        "width": 2
+      }, 
+      "source_handle": "output", 
+      "label": "", 
+      "target_node_id": "task-5", 
+      "source_node_id": "task-4", 
+      "target_handle": "input", 
+      "id": "edge-7"
+    }, 
+    {
+      "style": {
+        "color": "#6b7280", 
+        "width": 2
+      }, 
+      "source_handle": "output", 
+      "label": "", 
+      "target_node_id": "end-1", 
+      "source_node_id": "task-5", 
+      "target_handle": "input", 
+      "id": "edge-8"
+    }
+  ], 
+  "notifications": {
+    "auto_notify": true, 
+    "channels": [
+      "cliExtra_send", 
+      "cliExtra_broadcast"
+    ]
+  }, 
+  "version": "1.0.0", 
+  "canvas_config": {
+    "width": 1200, 
+    "pan_x": 0, 
+    "zoom": 1.0, 
+    "pan_y": 0, 
+    "height": 800
+  }, 
+  "roles": [
+    {
+      "responsibilities": [
+        "Shell脚本开发", 
+        "系统管理", 
+        "自动化运维"
+      ], 
+      "tools": [
+        "git", 
+        "shell", 
+        "tmux", 
+        "bash"
+      ], 
+      "name": "devops-engineer", 
+      "description": "运维工程师 - Shell脚本开发和系统管理"
+    }, 
+    {
+      "responsibilities": [
+        "Web界面开发", 
+        "用户体验设计", 
+        "API集成"
+      ], 
+      "tools": [
+        "git", 
+        "flask", 
+        "javascript", 
+        "html", 
+        "css", 
+        "python"
+      ], 
+      "name": "frontend-engineer", 
+      "description": "前端工程师 - Web界面开发"
+    }
+  ], 
+  "project_description": "基于tmux的Amazon Q CLI实例管理系统", 
+  "nodes": [
+    {
+      "status": "pending", 
+      "style": {
+        "width": 150, 
+        "border_color": "#059669", 
+        "text_color": "#ffffff", 
+        "background_color": "#10b981", 
+        "height": 60
+      }, 
+      "name": "开始", 
+      "owner": "any", 
+      "position": {
+        "y": 200, 
+        "x": 100
+      }, 
+      "type": "start", 
+      "id": "start-1", 
+      "description": "工作流开始"
+    }, 
+    {
+      "deliverables": [
+        "需求文档", 
+        "技术方案"
+      ], 
+      "status": "pending", 
+      "style": {
+        "width": 150, 
+        "border_color": "#2563eb", 
+        "text_color": "#ffffff", 
+        "background_color": "#3b82f6", 
+        "height": 60
+      }, 
+      "name": "需求分析", 
+      "owner": "any", 
+      "position": {
+        "y": 200, 
+        "x": 300
+      }, 
+      "type": "task", 
+      "id": "task-1", 
+      "responsibilities": [
+        "需求收集", 
+        "可行性分析", 
+        "技术调研"
+      ], 
+      "description": "分析用户需求和技术可行性"
+    }, 
+    {
+      "deliverables": [
+        "架构文档", 
+        "接口规范"
+      ], 
+      "status": "pending", 
+      "style": {
+        "width": 150, 
+        "border_color": "#2563eb", 
+        "text_color": "#ffffff", 
+        "background_color": "#3b82f6", 
+        "height": 60
+      }, 
+      "name": "技术设计", 
+      "owner": "devops-engineer", 
+      "position": {
+        "y": 200, 
+        "x": 500
+      }, 
+      "type": "task", 
+      "id": "task-2", 
+      "responsibilities": [
+        "架构设计", 
+        "技术选型", 
+        "接口设计"
+      ], 
+      "description": "设计系统架构和技术方案"
+    }, 
+    {
+      "status": "pending", 
+      "style": {
+        "width": 150, 
+        "border_color": "#d97706", 
+        "text_color": "#ffffff", 
+        "background_color": "#f59e0b", 
+        "height": 60
+      }, 
+      "name": "并行开发", 
+      "owner": "devops-engineer", 
+      "position": {
+        "y": 200, 
+        "x": 700
+      }, 
+      "type": "decision", 
+      "id": "parallel-1", 
+      "description": "CLI和Web界面并行开发"
+    }, 
+    {
+      "deliverables": [
+        "CLI工具", 
+        "测试报告", 
+        "使用文档"
+      ], 
+      "status": "pending", 
+      "style": {
+        "width": 150, 
+        "border_color": "#2563eb", 
+        "text_color": "#ffffff", 
+        "background_color": "#3b82f6", 
+        "height": 60
+      }, 
+      "name": "CLI开发", 
+      "owner": "devops-engineer", 
+      "position": {
+        "y": 100, 
+        "x": 600
+      }, 
+      "type": "task", 
+      "id": "task-3", 
+      "responsibilities": [
+        "Shell脚本开发", 
+        "功能测试", 
+        "文档更新"
+      ], 
+      "description": "开发和测试CLI功能"
+    }, 
+    {
+      "deliverables": [
+        "Web界面", 
+        "用户手册"
+      ], 
+      "status": "pending", 
+      "style": {
+        "width": 150, 
+        "border_color": "#2563eb", 
+        "text_color": "#ffffff", 
+        "background_color": "#3b82f6", 
+        "height": 60
+      }, 
+      "name": "Web界面开发", 
+      "owner": "frontend-engineer", 
+      "position": {
+        "y": 300, 
+        "x": 600
+      }, 
+      "type": "task", 
+      "id": "task-4", 
+      "responsibilities": [
+        "前端开发", 
+        "用户体验", 
+        "API集成"
+      ], 
+      "description": "开发Web管理界面"
+    }, 
+    {
+      "deliverables": [
+        "测试报告", 
+        "修复记录"
+      ], 
+      "status": "pending", 
+      "style": {
+        "width": 150, 
+        "border_color": "#2563eb", 
+        "text_color": "#ffffff", 
+        "background_color": "#3b82f6", 
+        "height": 60
+      }, 
+      "name": "集成测试", 
+      "owner": "both", 
+      "position": {
+        "y": 200, 
+        "x": 800
+      }, 
+      "type": "task", 
+      "id": "task-5", 
+      "responsibilities": [
+        "集成测试", 
+        "Bug修复", 
+        "性能优化"
+      ], 
+      "description": "测试CLI和Web功能集成"
+    }, 
+    {
+      "status": "pending", 
+      "style": {
+        "width": 150, 
+        "border_color": "#dc2626", 
+        "text_color": "#ffffff", 
+        "background_color": "#ef4444", 
+        "height": 60
+      }, 
+      "name": "结束", 
+      "owner": "any", 
+      "position": {
+        "y": 200, 
+        "x": 1000
+      }, 
+      "type": "end", 
+      "id": "end-1", 
+      "description": "工作流结束"
+    }
+  ], 
+  "id": "default-workflow-1", 
+  "description": "标准的软件开发工作流程"
+}
