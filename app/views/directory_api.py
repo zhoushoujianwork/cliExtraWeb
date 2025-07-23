@@ -25,9 +25,10 @@ def select_directory():
         end tell
         '''
         
+        # 增加超时时间到5分钟，给用户足够时间选择
         result = subprocess.run(
             ['osascript', '-e', applescript],
-            capture_output=True, text=True, timeout=30
+            capture_output=True, text=True, timeout=300
         )
         
         if result.returncode == 0:
@@ -38,6 +39,8 @@ def select_directory():
                 # 获取绝对路径
                 abs_path = os.path.abspath(selected_path)
                 
+                logger.info(f'用户选择目录: {abs_path}')
+                
                 return jsonify({
                     'success': True,
                     'path': abs_path,
@@ -45,26 +48,45 @@ def select_directory():
                     'parent_path': os.path.dirname(abs_path)
                 })
             else:
+                logger.error(f'选择的路径无效: {selected_path}')
                 return jsonify({
                     'success': False,
                     'error': '选择的路径不存在或不是目录'
                 }), 400
         else:
-            # 用户取消或出错
-            error_msg = result.stderr.strip() if result.stderr else '用户取消选择'
-            return jsonify({
-                'success': False,
-                'error': error_msg,
-                'cancelled': True
-            }), 400
+            # 检查是否是用户取消
+            stderr_output = result.stderr.strip() if result.stderr else ''
+            
+            if 'User canceled' in stderr_output or result.returncode == 1:
+                logger.info('用户取消了目录选择')
+                return jsonify({
+                    'success': False,
+                    'error': '用户取消选择',
+                    'cancelled': True
+                }), 400
+            else:
+                logger.error(f'AppleScript执行失败: returncode={result.returncode}, stderr={stderr_output}')
+                return jsonify({
+                    'success': False,
+                    'error': f'目录选择失败: {stderr_output or "未知错误"}'
+                }), 400
             
     except subprocess.TimeoutExpired:
+        logger.error('目录选择超时 - 用户可能需要更多时间')
         return jsonify({
             'success': False,
-            'error': '目录选择超时'
-        }), 500
+            'error': '目录选择超时，请重试或手动输入路径',
+            'timeout': True
+        }), 408
+    except FileNotFoundError:
+        logger.error('osascript命令不存在 - 可能不是macOS系统')
+        return jsonify({
+            'success': False,
+            'error': '系统不支持目录选择对话框，请手动输入路径',
+            'unsupported': True
+        }), 400
     except Exception as e:
-        logger.error(f'目录选择失败: {e}')
+        logger.error(f'目录选择异常: {e}')
         return jsonify({
             'success': False,
             'error': f'目录选择失败: {str(e)}'

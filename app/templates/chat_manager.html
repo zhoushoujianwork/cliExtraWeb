@@ -1307,14 +1307,22 @@ async function browsePath() {
         browseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 选择中...';
         browseBtn.disabled = true;
         
-        // 调用后端API打开目录选择对话框
+        // 显示提示信息
+        showNotification('正在打开目录选择对话框，请在系统对话框中选择目录...', 'info');
+        
+        // 调用后端API打开目录选择对话框，增加超时时间到6分钟
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 360000); // 6分钟超时
+        
         const response = await fetch('/api/directory/select', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-            }
+            },
+            signal: controller.signal
         });
         
+        clearTimeout(timeoutId);
         const result = await response.json();
         
         if (result.success) {
@@ -1329,17 +1337,30 @@ async function browsePath() {
             
         } else {
             if (result.cancelled) {
-                // 用户取消选择，不显示错误
-                console.log('用户取消了目录选择');
+                // 用户取消选择，显示温和提示
+                showNotification('已取消目录选择', 'info');
+            } else if (result.timeout) {
+                // 超时处理
+                showNotification('目录选择超时，请重试或手动输入路径', 'warning');
+                showDirectoryInputHelper();
+            } else if (result.unsupported) {
+                // 系统不支持
+                showNotification('系统不支持目录选择对话框，请手动输入路径', 'warning');
+                showDirectoryInputHelper();
             } else {
-                // 显示错误信息
+                // 其他错误
                 showNotification(`选择目录失败: ${result.error}`, 'error');
             }
         }
         
     } catch (error) {
-        console.error('浏览目录失败:', error);
-        showNotification('浏览目录失败: ' + error.message, 'error');
+        if (error.name === 'AbortError') {
+            // 前端超时
+            showNotification('目录选择超时，请重试或手动输入路径', 'warning');
+        } else {
+            console.error('浏览目录失败:', error);
+            showNotification('浏览目录失败: ' + error.message, 'error');
+        }
         
         // 降级方案：显示手动输入提示
         showDirectoryInputHelper();
@@ -1411,39 +1432,75 @@ function showDirectoryInputHelper() {
     const helpModal = document.createElement('div');
     helpModal.className = 'modal fade';
     helpModal.innerHTML = `
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        <i class="fas fa-folder-open"></i> 选择本地目录
+                        <i class="fas fa-folder-open"></i> 目录路径输入帮助
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle"></i>
-                        <strong>目录选择帮助</strong>
+                        <strong>目录选择对话框无法使用，请手动输入目录路径</strong>
                     </div>
-                    <p>请手动输入本地目录的完整路径，例如：</p>
-                    <ul>
-                        <li><code>/Users/username/Documents/project</code></li>
-                        <li><code>/home/user/workspace/myapp</code></li>
-                        <li><code>C:\\Users\\username\\Documents\\project</code> (Windows)</li>
-                    </ul>
-                    <div class="alert alert-warning">
+                    
+                    <h6><i class="fas fa-keyboard"></i> 输入格式示例：</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-primary">绝对路径：</h6>
+                            <ul class="list-unstyled">
+                                <li><code>/Users/username/Documents/project</code></li>
+                                <li><code>/home/user/workspace/myapp</code></li>
+                                <li><code>/opt/projects/webapp</code></li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-success">快捷符号：</h6>
+                            <ul class="list-unstyled">
+                                <li><code>~</code> - 用户主目录</li>
+                                <li><code>~/Documents</code> - 文档目录</li>
+                                <li><code>.</code> - 当前目录</li>
+                                <li><code>../</code> - 上级目录</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-success">
+                        <i class="fas fa-magic"></i>
+                        <strong>智能功能：</strong>输入路径后会自动验证并转换为绝对路径
+                    </div>
+                    
+                    <h6><i class="fas fa-tools"></i> 快速操作：</h6>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="fillHomeDirectory()" data-bs-dismiss="modal">
+                            <i class="fas fa-home"></i> 使用主目录
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="fillCurrentDirectory()" data-bs-dismiss="modal">
+                            <i class="fas fa-folder"></i> 使用当前目录
+                        </button>
+                        <button type="button" class="btn btn-outline-info btn-sm" onclick="fillDocumentsDirectory()" data-bs-dismiss="modal">
+                            <i class="fas fa-file-alt"></i> 使用文档目录
+                        </button>
+                    </div>
+                    
+                    <div class="alert alert-warning mt-3">
                         <i class="fas fa-exclamation-triangle"></i>
-                        <strong>注意：</strong>请确保路径存在且有读写权限
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">当前工作目录参考：</label>
-                        <input type="text" class="form-control" value="${window.location.origin}" readonly>
-                        <div class="form-text">您可以基于当前位置输入相对路径</div>
+                        <strong>注意事项：</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>确保目录存在且有读写权限</li>
+                            <li>路径中不要包含特殊字符</li>
+                            <li>可以重新点击"浏览"按钮再次尝试</li>
+                        </ul>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
-                    <button type="button" class="btn btn-primary" onclick="fillCurrentDirectory()" data-bs-dismiss="modal">
-                        <i class="fas fa-folder"></i> 使用当前目录
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> 关闭
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="retryBrowsePath()" data-bs-dismiss="modal">
+                        <i class="fas fa-redo"></i> 重新尝试浏览
                     </button>
                 </div>
             </div>
@@ -1457,6 +1514,43 @@ function showDirectoryInputHelper() {
     // 模态框关闭后清理
     helpModal.addEventListener('hidden.bs.modal', () => {
         document.body.removeChild(helpModal);
+    });
+}
+
+// 填充主目录
+function fillHomeDirectory() {
+    const pathInput = document.getElementById('instancePath');
+    pathInput.value = '~';
+    pathInput.focus();
+    // 触发验证
+    setTimeout(() => validatePath(), 100);
+}
+
+// 填充当前目录
+function fillCurrentDirectory() {
+    const pathInput = document.getElementById('instancePath');
+    pathInput.value = '.';
+    pathInput.focus();
+    // 触发验证
+    setTimeout(() => validatePath(), 100);
+}
+
+// 填充文档目录
+function fillDocumentsDirectory() {
+    const pathInput = document.getElementById('instancePath');
+    pathInput.value = '~/Documents';
+    pathInput.focus();
+    // 触发验证
+    setTimeout(() => validatePath(), 100);
+}
+
+// 重新尝试浏览路径
+function retryBrowsePath() {
+    // 延迟一下再调用，避免模态框关闭动画冲突
+    setTimeout(() => {
+        browsePath();
+    }, 300);
+}
     });
 }
 
