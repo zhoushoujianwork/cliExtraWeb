@@ -330,11 +330,8 @@ function restartPeriodicRefresh() {
         clearInterval(window.instanceRefreshInterval);
     }
     
-    window.instanceRefreshInterval = setInterval(() => {
-        if (typeof loadInstancesWithNamespace === 'function') {
-            loadInstancesWithNamespace();
-        }
-    }, 5000);
+    // 移除自动刷新，改为手动刷新
+    // 用户可以通过刷新按钮手动更新实例列表
 }
 
 /**

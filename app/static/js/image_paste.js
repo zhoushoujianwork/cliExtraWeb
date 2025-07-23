@@ -124,7 +124,7 @@ class ImagePasteHandler {
                 const imageUrl = result.path || result.url;
                 if (imageUrl) {
                     const currentValue = this.inputElement.value;
-                    const newValue = currentValue + (currentValue ? '\n' : '') + `![图片](${imageUrl})`;
+                    const newValue = currentValue + (currentValue ? '\n' : '') + `[图片](${imageUrl})`;
                     this.inputElement.value = newValue;
                     
                     // 触发input事件

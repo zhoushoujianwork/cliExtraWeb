@@ -321,6 +321,34 @@
     align-items: center;
 }
 
+.terminal-header .btn {
+    margin-left: 5px;
+    font-size: 11px;
+    padding: 2px 8px;
+    transition: all 0.3s ease;
+}
+
+.terminal-header .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+#toggle-terminal-mode {
+    position: relative;
+}
+
+#toggle-terminal-mode.btn-outline-warning:hover {
+    background-color: #ffc107;
+    border-color: #ffc107;
+    color: #212529;
+}
+
+#toggle-terminal-mode.btn-outline-success:hover {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: white;
+}
+
 .terminal-body {
     height: calc(100% - 35px);
     padding: 0;
@@ -415,6 +443,9 @@
             <div class="card-header d-flex justify-content-between align-items-center flex-shrink-0">
                 <h5 class="mb-0"><i class="fas fa-server"></i> Q CLI 实例</h5>
                 <div class="btn-group btn-group-sm">
+                    <button class="btn btn-primary" onclick="manualRefresh()" title="刷新实例列表">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
                     <button class="btn btn-success" onclick="createInstance()" title="创建新实例">
                         <i class="fas fa-plus"></i>
                     </button>
@@ -438,8 +469,11 @@
     <div class="center-panel">
         <div class="card h-100">
             <div class="terminal-header">
-                <span><i class="fas fa-terminal"></i> 终端输出 (只读)</span>
+                <span><i class="fas fa-terminal"></i> <span id="terminal-mode-text">终端输出 (只读)</span></span>
                 <div>
+                    <button id="toggle-terminal-mode" class="btn btn-sm btn-outline-warning" onclick="toggleTerminalMode()" title="切换终端模式">
+                        <i class="fas fa-keyboard"></i> 交互模式
+                    </button>
                     <button class="btn btn-sm btn-outline-light" onclick="clearTerminal()" title="清空终端">
                         <i class="fas fa-trash"></i>
                     </button>
@@ -813,6 +847,7 @@ let term;
 let fitAddon;
 let socket;
 let currentMonitoringInstance = null;
+let isInteractiveMode = false;  // 终端模式标志
 
 // 初始化Socket.IO
 function initSocket() {
@@ -820,11 +855,16 @@ function initSocket() {
     
     socket.on('terminal_output', function(data) {
         if (term && data.instance_id === currentMonitoringInstance) {
-            // 处理输出数据，确保正确显示
-            let output = data.data;
-            if (typeof output === 'string' && output.length > 0) {
-                // 直接写入终端，xterm.js会处理ANSI序列
-                term.write(output);
+            if (isInteractiveMode && data.output) {
+                // 交互模式下的输出
+                term.write(data.output);
+            } else if (!isInteractiveMode && data.data) {
+                // 只读模式下的日志输出
+                let output = data.data;
+                if (typeof output === 'string' && output.length > 0) {
+                    // 直接写入终端，xterm.js会处理ANSI序列
+                    term.write(output);
+                }
             }
         }
     });
@@ -840,6 +880,27 @@ function initSocket() {
         console.log('Terminal status:', data);
         if (data.status === 'started' && data.log_file) {
             term.write('\r\n\x1b[36mMonitoring log file: ' + data.log_file + '\x1b[0m\r\n');
+        }
+    });
+    
+    // 交互终端连接成功
+    socket.on('terminal_connected', function(data) {
+        console.log('Interactive terminal connected:', data);
+        if (term && data.instance_id === currentMonitoringInstance) {
+            term.clear();
+            term.write('\r\n\x1b[32m已连接到交互终端: ' + data.session_name + '\x1b[0m\r\n');
+            term.write('\x1b[36m现在可以直接输入命令进行交互\x1b[0m\r\n\r\n');
+        }
+    });
+    
+    // 交互终端断开连接
+    socket.on('terminal_disconnected', function(data) {
+        console.log('Interactive terminal disconnected:', data);
+        if (term && data.instance_id === currentMonitoringInstance) {
+            term.write('\r\n\x1b[31m交互终端已断开连接\x1b[0m\r\n');
+            if (data.message) {
+                term.write('\x1b[33m' + data.message + '\x1b[0m\r\n');
+            }
         }
     });
 }
@@ -871,7 +932,7 @@ function initTerminal() {
         },
         fontSize: 13,
         fontFamily: 'Monaco, Menlo, "Ubuntu Mono", "Courier New", monospace',
-        cursorBlink: false,  // 只读模式，不需要光标闪烁
+        cursorBlink: false,  // 默认只读模式，不需要光标闪烁
         cursorStyle: 'block',
         scrollback: 10000,
         tabStopWidth: 4,
@@ -879,7 +940,7 @@ function initTerminal() {
         allowTransparency: false,
         bellSound: null,
         bellStyle: 'none',
-        disableStdin: true  // 禁用输入，只读模式
+        disableStdin: true  // 默认禁用输入，只读模式
     });
     
     window.fitAddon = new FitAddon.FitAddon();
@@ -918,6 +979,23 @@ function startMonitoring(instanceId) {
     }
     
     currentMonitoringInstance = instanceId;
+    
+    // 重置为只读模式
+    if (isInteractiveMode) {
+        isInteractiveMode = false;
+        const toggleBtn = document.getElementById('toggle-terminal-mode');
+        const modeText = document.getElementById('terminal-mode-text');
+        toggleBtn.innerHTML = '<i class="fas fa-keyboard"></i> 交互模式';
+        toggleBtn.className = 'btn btn-sm btn-outline-warning';
+        modeText.textContent = '终端输出 (只读)';
+        
+        // 重新配置终端为只读模式
+        if (term) {
+            term.options.disableStdin = true;
+            term.options.cursorBlink = false;
+        }
+    }
+    
     term.clear();
     term.writeln('\x1b[33mStarting to monitor instance: ' + instanceId + '\x1b[0m');
     term.writeln('\x1b[36mLooking for log file...\x1b[0m\r\n');
@@ -929,10 +1007,112 @@ function startMonitoring(instanceId) {
 // 停止监控
 function stopMonitoring() {
     if (currentMonitoringInstance) {
-        socket.emit('stop_terminal_monitoring', {instance_id: currentMonitoringInstance});
+        if (isInteractiveMode) {
+            // 如果是交互模式，断开交互终端连接
+            socket.emit('leave_terminal', {instance_id: currentMonitoringInstance});
+        } else {
+            // 如果是只读模式，停止日志监控
+            socket.emit('stop_terminal_monitoring', {instance_id: currentMonitoringInstance});
+        }
+        
         currentMonitoringInstance = null;
         term.writeln('\r\n\x1b[31mMonitoring stopped\x1b[0m');
+        
+        // 重置模式
+        if (isInteractiveMode) {
+            isInteractiveMode = false;
+            const toggleBtn = document.getElementById('toggle-terminal-mode');
+            const modeText = document.getElementById('terminal-mode-text');
+            toggleBtn.innerHTML = '<i class="fas fa-keyboard"></i> 交互模式';
+            toggleBtn.className = 'btn btn-sm btn-outline-warning';
+            modeText.textContent = '终端输出 (只读)';
+        }
     }
+}
+
+// 切换终端模式
+function toggleTerminalMode() {
+    if (!currentMonitoringInstance) {
+        alert('请先选择一个实例进行监控');
+        return;
+    }
+    
+    const toggleBtn = document.getElementById('toggle-terminal-mode');
+    const modeText = document.getElementById('terminal-mode-text');
+    
+    if (isInteractiveMode) {
+        // 切换到只读模式
+        switchToReadOnlyMode();
+        toggleBtn.innerHTML = '<i class="fas fa-keyboard"></i> 交互模式';
+        toggleBtn.className = 'btn btn-sm btn-outline-warning';
+        modeText.textContent = '终端输出 (只读)';
+        isInteractiveMode = false;
+    } else {
+        // 切换到交互模式
+        switchToInteractiveMode();
+        toggleBtn.innerHTML = '<i class="fas fa-eye"></i> 只读模式';
+        toggleBtn.className = 'btn btn-sm btn-outline-success';
+        modeText.textContent = '终端交互 (可输入)';
+        isInteractiveMode = true;
+    }
+}
+
+// 切换到只读模式
+function switchToReadOnlyMode() {
+    if (currentMonitoringInstance) {
+        // 断开交互终端连接
+        socket.emit('leave_terminal', {instance_id: currentMonitoringInstance});
+        
+        // 重新配置终端为只读模式
+        if (term) {
+            term.options.disableStdin = true;
+            term.options.cursorBlink = false;
+        }
+        
+        // 重新开始日志监控
+        setTimeout(() => {
+            socket.emit('start_terminal_monitoring', {instance_id: currentMonitoringInstance});
+        }, 500);
+    }
+}
+
+// 切换到交互模式
+function switchToInteractiveMode() {
+    if (currentMonitoringInstance) {
+        // 停止日志监控
+        socket.emit('stop_terminal_monitoring', {instance_id: currentMonitoringInstance});
+        
+        // 配置终端为交互模式
+        if (term) {
+            term.options.disableStdin = false;
+            term.options.cursorBlink = true;
+            
+            // 绑定输入事件
+            term.onData(data => {
+                if (isInteractiveMode && currentMonitoringInstance) {
+                    socket.emit('terminal_input', {
+                        instance_id: currentMonitoringInstance,
+                        input: data
+                    });
+                }
+            });
+        }
+        
+        // 连接到交互终端
+        setTimeout(() => {
+            socket.emit('join_terminal', {
+                instance_id: currentMonitoringInstance,
+                session_name: getSessionName(currentMonitoringInstance)
+            });
+        }, 500);
+    }
+}
+
+// 获取实例的会话名称
+function getSessionName(instanceId) {
+    // 这里可以从实例列表中获取会话名称
+    // 暂时使用实例ID作为会话名称
+    return instanceId;
 }
 
 // 清空终端
@@ -1010,16 +1190,36 @@ function stopInstance(instanceId) {
 function manualRefresh() {
     console.log('执行手动刷新...');
     
+    // 显示刷新按钮的加载状态
+    const refreshBtn = document.querySelector('button[onclick="manualRefresh()"]');
+    if (refreshBtn) {
+        const originalHTML = refreshBtn.innerHTML;
+        refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        refreshBtn.disabled = true;
+        
+        // 恢复按钮状态
+        setTimeout(() => {
+            refreshBtn.innerHTML = originalHTML;
+            refreshBtn.disabled = false;
+        }, 1000);
+    }
+    
     // 如果有namespace管理器，使用全面刷新
     if (typeof refreshAllPageComponents === 'function') {
         refreshAllPageComponents();
     } else if (typeof loadInstancesWithNamespace === 'function') {
         loadInstancesWithNamespace();
+    } else {
+        // 备用刷新方法
+        loadInstances();
     }
     
     // 显示刷新提示
     if (typeof showNotification === 'function') {
-        showNotification('页面已刷新', 'success');
+        showNotification('实例列表已刷新', 'success', 2000);
+    } else {
+        // 备用提示方法
+        console.log('实例列表已刷新');
     }
 }
 
@@ -1121,12 +1321,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // namespace管理器会自动加载实例
-    // 定期刷新实例列表
-    setInterval(() => {
-        if (typeof loadInstancesWithNamespace === 'function') {
-            loadInstancesWithNamespace();
-        }
-    }, 5000);
+    // 移除自动刷新，改为手动刷新
     
     // 初始化namespace统计显示
     setTimeout(() => {
@@ -1551,8 +1746,6 @@ function retryBrowsePath() {
         browsePath();
     }, 300);
 }
-    });
-}
 
 // 实例创建进度管理
 let creationAbortController = null;
@@ -1736,14 +1929,6 @@ async function continueInstanceCreation(requestData) {
             alert('创建实例失败: ' + error.message);
         }, 2000);
     }
-}
-function fillCurrentDirectory() {
-    const pathInput = document.getElementById('instancePath');
-    // 使用一个合理的默认路径
-    const defaultPath = '/Users/' + (navigator.userAgent.includes('Mac') ? 'username' : 'user') + '/Documents';
-    pathInput.value = defaultPath;
-    pathInput.focus();
-    pathInput.select();
 }
 
 async function createInstanceFromModal() {
