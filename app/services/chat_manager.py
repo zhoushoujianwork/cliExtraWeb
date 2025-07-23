@@ -68,8 +68,10 @@ class ChatManager:
     
     def load_namespace_cache_history(self, namespace: str = 'q_cli'):
         """从 namespace 缓存文件加载历史记录"""
-        if self.namespace_cache_loaded:
-            return  # 避免重复加载
+        # 检查是否是同一个namespace，如果是则避免重复加载
+        if (self.namespace_cache_loaded and 
+            getattr(self, 'current_namespace', None) == namespace):
+            return
             
         try:
             # 构建缓存文件路径
@@ -79,9 +81,13 @@ class ChatManager:
             
             print('尝试加载缓存文件: {}'.format(cache_file))
             
+            # 清空现有历史记录，准备加载新namespace的数据
+            self.chat_history.clear()
+            
             if not os.path.exists(cache_file):
                 self.add_system_log('Namespace 缓存文件不存在: {}'.format(cache_file))
                 print('缓存文件不存在: {}'.format(cache_file))
+                self.namespace_cache_loaded = True  # 标记为已加载，即使是空的
                 return
             
             with open(cache_file, 'r') as f:
@@ -164,10 +170,11 @@ class ChatManager:
         return False
     
     def get_chat_history(self, limit: int = None, namespace: str = 'q_cli') -> List[Dict]:
-        """获取聊天历史，首次调用时会加载 namespace 缓存"""
-        # 首次调用时加载缓存数据
-        if not self.namespace_cache_loaded:
+        """获取聊天历史，支持动态切换namespace"""
+        # 检查是否需要重新加载不同namespace的缓存
+        if not self.namespace_cache_loaded or getattr(self, 'current_namespace', None) != namespace:
             self.load_namespace_cache_history(namespace)
+            self.current_namespace = namespace  # 记录当前加载的namespace
         
         if limit:
             history = list(self.chat_history)[-limit:]
