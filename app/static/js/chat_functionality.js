@@ -515,9 +515,32 @@ function getInstanceAvatar(instanceId) {
     return avatars[Math.abs(hash) % avatars.length];
 }
 
-// 格式化消息内容，支持代码块和链接
+// 格式化消息内容，支持代码块、链接和图片
 function formatMessage(message) {
     let formatted = escapeHtml(message);
+    
+    // 处理图片 - 支持Markdown格式 ![alt](url)
+    formatted = formatted.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, url) => {
+        return `<div class="message-image-container">
+            <img src="${url}" alt="${alt}" class="message-image" onclick="showImageModal('${url}', '${alt}')" loading="lazy">
+        </div>`;
+    });
+    
+    // 处理旧格式的图片标记 [图片: path]
+    formatted = formatted.replace(/\[图片:\s*([^\]]+)\]/g, (match, path) => {
+        // 转换绝对路径为相对URL
+        let url = path;
+        if (path.includes('namespaces/')) {
+            url = '/static/data/' + path.substring(path.indexOf('namespaces/'));
+        } else if (path.includes('conversations/images/')) {
+            const namespace = getCurrentNamespace() || 'default';
+            url = `/api/image/${namespace}/${path.split('/').pop()}`;
+        }
+        
+        return `<div class="message-image-container">
+            <img src="${url}" alt="图片" class="message-image" onclick="showImageModal('${url}', '图片')" loading="lazy">
+        </div>`;
+    });
     
     // 处理代码块
     formatted = formatted.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
@@ -572,4 +595,71 @@ function showCopyToast() {
     setTimeout(() => {
         document.body.removeChild(toast);
     }, 2000);
+}
+
+// 显示图片模态框
+function showImageModal(imageUrl, altText) {
+    // 创建模态框
+    const modal = document.createElement('div');
+    modal.className = 'image-modal';
+    modal.innerHTML = `
+        <div class="image-modal-backdrop" onclick="closeImageModal()"></div>
+        <div class="image-modal-content">
+            <div class="image-modal-header">
+                <span class="image-modal-title">${escapeHtml(altText || '图片')}</span>
+                <button class="image-modal-close" onclick="closeImageModal()">&times;</button>
+            </div>
+            <div class="image-modal-body">
+                <img src="${imageUrl}" alt="${escapeHtml(altText || '图片')}" class="modal-image">
+            </div>
+            <div class="image-modal-footer">
+                <button class="btn btn-sm btn-primary" onclick="downloadImage('${imageUrl}', '${altText || 'image'}')">
+                    <i class="fas fa-download"></i> 下载
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="copyImageUrl('${imageUrl}')">
+                    <i class="fas fa-copy"></i> 复制链接
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // 添加键盘事件监听
+    document.addEventListener('keydown', handleModalKeydown);
+}
+
+// 关闭图片模态框
+function closeImageModal() {
+    const modal = document.querySelector('.image-modal');
+    if (modal) {
+        document.body.removeChild(modal);
+        document.removeEventListener('keydown', handleModalKeydown);
+    }
+}
+
+// 处理模态框键盘事件
+function handleModalKeydown(event) {
+    if (event.key === 'Escape') {
+        closeImageModal();
+    }
+}
+
+// 下载图片
+function downloadImage(imageUrl, filename) {
+    const link = document.createElement('a');
+    link.href = imageUrl;
+    link.download = filename + '_' + Date.now();
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// 复制图片链接
+function copyImageUrl(imageUrl) {
+    navigator.clipboard.writeText(imageUrl).then(() => {
+        showCopyToast();
+    }).catch(err => {
+        console.error('复制失败:', err);
+    });
 }

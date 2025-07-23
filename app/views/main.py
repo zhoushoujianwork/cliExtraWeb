@@ -1,7 +1,8 @@
 """
 Main views for Q Chat Manager
 """
-from flask import Blueprint, render_template, request
+from flask import Blueprint, render_template, request, send_from_directory, abort
+import os
 
 from app.services.instance_manager import instance_manager
 from app.services.chat_manager import chat_manager
@@ -28,6 +29,32 @@ def index():
 def roles():
     """角色管理页面"""
     return render_template('role_manager.html')
+
+@bp.route('/static/data/<path:filename>')
+def serve_data_file(filename):
+    """提供数据文件的静态访问服务"""
+    try:
+        # 构建完整的文件路径
+        work_dir = instance_manager.work_dir
+        file_path = os.path.join(work_dir, filename)
+        
+        # 安全检查：确保文件路径在工作目录内
+        if not os.path.abspath(file_path).startswith(os.path.abspath(work_dir)):
+            abort(403)
+        
+        # 检查文件是否存在
+        if not os.path.exists(file_path):
+            abort(404)
+        
+        # 获取目录和文件名
+        directory = os.path.dirname(file_path)
+        filename_only = os.path.basename(file_path)
+        
+        return send_from_directory(directory, filename_only)
+        
+    except Exception as e:
+        print(f"Error serving data file {filename}: {str(e)}")
+        abort(500)
 
 @bp.route('/workflow')
 def workflow_manager():

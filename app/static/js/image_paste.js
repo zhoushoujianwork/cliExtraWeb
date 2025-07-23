@@ -95,15 +95,19 @@ class ImagePasteHandler {
             // 显示上传状态
             this.showUploadStatus('正在上传图片...');
 
-            // 生成临时文件名
+            // 生成文件名
             const timestamp = Date.now();
             const extension = this.getFileExtension(file.name) || 'png';
-            const tempFileName = `temp_image_${timestamp}_${++this.tempImageCounter}.${extension}`;
+            const fileName = `image_${timestamp}_${++this.tempImageCounter}.${extension}`;
+
+            // 获取当前namespace
+            const namespace = this.getCurrentNamespace() || 'default';
 
             // 创建 FormData 上传图片
             const formData = new FormData();
             formData.append('image', file);
-            formData.append('filename', tempFileName);
+            formData.append('filename', fileName);
+            formData.append('namespace', namespace);
 
             // 上传图片
             const response = await fetch('/api/upload-image', {
@@ -116,10 +120,10 @@ class ImagePasteHandler {
             if (result.success) {
                 console.log('图片上传成功:', result.path);
                 
-                // 在输入框中插入图片路径
-                const imagePath = result.path;
+                // 在输入框中插入图片标记，使用相对路径
+                const imageUrl = result.url;
                 const currentValue = this.inputElement.value;
-                const newValue = currentValue + (currentValue ? ' ' : '') + `[图片: ${imagePath}]`;
+                const newValue = currentValue + (currentValue ? '\n' : '') + `![图片](${imageUrl})`;
                 this.inputElement.value = newValue;
                 
                 // 触发input事件
@@ -138,6 +142,24 @@ class ImagePasteHandler {
             console.error('处理图片时出错:', error);
             this.showUploadStatus('处理图片时出错: ' + error.message, 'error');
         }
+    }
+
+    /**
+     * 获取当前namespace
+     */
+    getCurrentNamespace() {
+        // 尝试从全局函数获取
+        if (typeof getCurrentNamespace === 'function') {
+            return getCurrentNamespace();
+        }
+        
+        // 尝试从select元素获取
+        const namespaceSelect = document.getElementById('currentNamespaceSelect');
+        if (namespaceSelect) {
+            return namespaceSelect.value;
+        }
+        
+        return 'default';
     }
 
     /**
