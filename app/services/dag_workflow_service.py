@@ -92,10 +92,8 @@ class DAGWorkflowService:
     def load_workflow_from_cliextra(self, namespace: str = "default") -> Optional[Dict]:
         """从cliExtra配置加载工作流"""
         try:
-            # 尝试执行 qq workflow show 命令
-            cmd = ["qq", "workflow", "show"]
-            if namespace and namespace != "default":
-                cmd.append(namespace)
+            # 使用正确的命令格式: qq workflow show <namespace> -o json
+            cmd = ["qq", "workflow", "show", namespace, "-o", "json"]
             
             result = subprocess.run(
                 cmd,
@@ -113,7 +111,9 @@ class DAGWorkflowService:
                 if json_start != -1:
                     json_str = output[json_start:]
                     try:
-                        return json.loads(json_str)
+                        workflow_data = json.loads(json_str)
+                        logger.info(f"成功加载 {namespace} 的workflow配置")
+                        return workflow_data
                     except json.JSONDecodeError as e:
                         logger.warning(f"无法解析workflow配置JSON: {str(e)}")
                         logger.debug(f"JSON内容: {json_str[:200]}...")
@@ -123,6 +123,8 @@ class DAGWorkflowService:
                     return None
             else:
                 logger.info(f"Namespace {namespace} 没有workflow配置或命令执行失败")
+                logger.debug(f"Command: {' '.join(cmd)}")
+                logger.debug(f"Return code: {result.returncode}")
                 logger.debug(f"stderr: {result.stderr}")
                 return None
                 
