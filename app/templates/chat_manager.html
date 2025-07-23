@@ -192,6 +192,9 @@
 <!-- 简化的实例操作 -->
 <script src="{{ url_for('static', filename='js/simple_instance_ops.js') }}"></script>
 
+<!-- 简化的namespace管理 -->
+<script src="{{ url_for('static', filename='js/simple_namespace.js') }}"></script>
+
 <script>
 // 全局变量
 let term;
@@ -283,41 +286,22 @@ function clearTerminal() {
     }
 }
 
-// 加载实例列表
+// 加载实例列表 - 更新为使用namespace功能
 function loadInstances() {
-    fetch('/api/instances')
-        .then(response => response.json())
-        .then(data => {
-            const instancesList = document.getElementById('instancesList');
-            instancesList.innerHTML = '';
-            
-            data.instances.forEach(instance => {
-                const instanceDiv = document.createElement('div');
-                instanceDiv.className = 'instance-item mb-2 p-2 border rounded';
-                instanceDiv.innerHTML = `
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong>${instance.id}</strong>
-                            <span class="badge bg-${instance.status === 'Attached' ? 'success' : 'warning'} ms-2">
-                                ${instance.status}
-                            </span>
-                        </div>
-                        <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-primary" onclick="startMonitoring('${instance.id}')" title="监控输出">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                            <button class="btn btn-outline-danger" onclick="stopInstance('${instance.id}')" title="停止实例">
-                                <i class="fas fa-stop"></i>
-                            </button>
-                        </div>
-                    </div>
-                `;
-                instancesList.appendChild(instanceDiv);
+    // 使用namespace管理器的函数
+    if (typeof loadInstancesWithNamespace === 'function') {
+        loadInstancesWithNamespace();
+    } else {
+        // 备用方案
+        fetch('/api/instances')
+            .then(response => response.json())
+            .then(data => {
+                updateInstancesList(data.instances || []);
+            })
+            .catch(error => {
+                console.error('加载实例失败:', error);
             });
-        })
-        .catch(error => {
-            console.error('加载实例失败:', error);
-        });
+    }
 }
 
 // 停止实例
@@ -358,19 +342,14 @@ function manualRefresh() {
 document.addEventListener('DOMContentLoaded', function() {
     initSocket();
     initTerminal();
-    loadInstances();
     
+    // namespace管理器会自动加载实例
     // 定期刷新实例列表
-    setInterval(loadInstances, 5000);
+    setInterval(() => {
+        if (typeof loadInstancesWithNamespace === 'function') {
+            loadInstancesWithNamespace();
+        }
+    }, 5000);
 });
-
-// 简化的namespace相关函数
-function switchNamespace() {
-    console.log('切换namespace - 功能待实现');
-}
-
-function showNamespaceManageModal() {
-    alert('Namespace管理功能待实现');
-}
 </script>
 {% endblock %}

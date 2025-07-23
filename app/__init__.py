@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Q Chat Manager Flask Application
 """
@@ -36,20 +37,20 @@ def create_app(config_class=Config):
         import time
         
         def startup_sync():
-            time.sleep(1)  # 等待应用完全启动
-            print("🔄 启动时同步tmux实例...")
+            time.sleep(1)  # Wait for app to fully start
+            print("Syncing tmux instances on startup...")
             instance_manager.sync_screen_instances()
             time.sleep(2)
             instances = instance_manager.get_instances()
-            print(f"✅ 发现 {len(instances)} 个已存在的tmux实例")
+            print("Found {} existing tmux instances".format(len(instances)))
             for inst in instances:
-                print(f"   - {inst['id']}: {inst['status']}")
+                print("   - {}: {}".format(inst['id'], inst['status']))
             
-            # 清理可能残留的Web终端
-            print("🧹 清理Web终端资源...")
+            # Clean up any remaining Web terminal resources
+            print("Cleaning up Web terminal resources...")
             web_terminal_manager.cleanup_all()
         
-        # 在后台线程中执行同步
+        # Execute sync in background thread
         sync_thread = threading.Thread(target=startup_sync, daemon=True)
         sync_thread.start()
     
