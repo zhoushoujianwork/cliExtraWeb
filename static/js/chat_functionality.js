@@ -7,8 +7,26 @@
 let chatHistory = [];
 let isLoadingHistory = false;
 
+// 获取当前 namespace（兼容函数）
+function getCurrentNamespace() {
+    // 尝试从全局变量获取
+    if (typeof window.currentNamespace !== 'undefined') {
+        return window.currentNamespace;
+    }
+    
+    // 尝试从选择器获取
+    const select = document.getElementById('currentNamespaceSelect');
+    if (select && select.value) {
+        return select.value;
+    }
+    
+    // 默认返回
+    return 'q_cli';
+}
+
 // 初始化聊天功能
 function initChatFunctionality() {
+    console.log('初始化聊天功能...');
     loadChatHistory();
     
     // 设置消息输入框的回车事件
@@ -295,13 +313,19 @@ function addChatStyles() {
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM 加载完成，开始初始化聊天功能');
     addChatStyles();
-    initChatFunctionality();
+    
+    // 延迟初始化，确保其他脚本加载完成
+    setTimeout(() => {
+        initChatFunctionality();
+    }, 1000);
 });
 
-// 定期刷新聊天历史（可选）
-setInterval(() => {
-    if (!isLoadingHistory) {
-        loadChatHistory();
-    }
-}, 30000); // 每30秒刷新一次
+// 强制刷新聊天历史（全局函数）
+window.forceRefreshChat = function() {
+    console.log('强制刷新聊天历史');
+    chatHistory = [];
+    isLoadingHistory = false;
+    loadChatHistory();
+};
