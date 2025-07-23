@@ -59,7 +59,18 @@ def serve_data_file(filename):
 @bp.route('/workflow')
 def workflow_manager():
     """Workflow 管理页面"""
-    return render_template('workflow_manager.html')
+    from app.services.dag_workflow_service import dag_workflow_service
+    
+    # 获取namespace参数
+    namespace = request.args.get('namespace', 'default')
+    
+    # 获取DAG结构数据
+    dag_result = dag_workflow_service.get_dag_structure(namespace)
+    dag_data = dag_result.get('dag', {}) if dag_result.get('success') else {}
+    
+    return render_template('workflow_manager.html', 
+                         namespace=namespace,
+                         dag_data=dag_data)
 
 @bp.route('/workflow/dag-editor')
 def workflow_dag_editor():

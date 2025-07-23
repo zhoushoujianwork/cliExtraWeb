@@ -125,31 +125,42 @@ class DAGWorkflowService:
         nodes = []
         edges = []
         
-        # 创建开始节点
-        start_node = DAGNode(
-            id="start",
-            type=NodeType.START,
-            name="开始",
-            description="工作流开始",
-            position={"x": 100, "y": 100}
-        )
-        nodes.append(start_node)
-        
-        # 解析workflow配置中的节点
-        dag_config = workflow_config.get("dag", {})
-        workflow_nodes = dag_config.get("nodes", {})
-        workflow_edges = dag_config.get("edges", [])
+        # 解析v2.0格式的workflow配置
+        workflow_nodes = workflow_config.get("nodes", {})
+        workflow_edges = workflow_config.get("edges", [])
+        roles_config = workflow_config.get("roles", {})
         
         # 转换节点
         for node_id, node_config in workflow_nodes.items():
+            node_type = node_config.get("type", "task")
+            
+            # 映射节点类型
+            if node_type == "decision":
+                node_type_enum = NodeType.DECISION
+            elif node_type == "start":
+                node_type_enum = NodeType.START
+            elif node_type == "end":
+                node_type_enum = NodeType.END
+            else:
+                node_type_enum = NodeType.TASK
+            
+            # 获取角色信息
+            owner = node_config.get("owner")
+            role_info = roles_config.get(owner, {}) if owner else {}
+            
             node = DAGNode(
                 id=node_id,
-                type=NodeType.TASK,
-                name=node_config.get("name", node_id),
+                type=node_type_enum,
+                name=node_config.get("title", node_id),
                 description=node_config.get("description", ""),
-                role=node_config.get("role"),
+                role=owner,
                 position=node_config.get("position", {"x": 200, "y": 200}),
-                config=node_config
+                config={
+                    "deliverables": node_config.get("deliverables", []),
+                    "completion_trigger": node_config.get("completion_trigger", {}),
+                    "role_info": role_info,
+                    "options": node_config.get("options", [])  # for decision nodes
+                }
             )
             nodes.append(node)
         
@@ -164,21 +175,12 @@ class DAGWorkflowService:
             )
             edges.append(edge)
         
-        # 创建结束节点
-        end_node = DAGNode(
-            id="end",
-            type=NodeType.END,
-            name="结束",
-            description="工作流结束",
-            position={"x": 400, "y": 300}
-        )
-        nodes.append(end_node)
-        
         # 创建DAG工作流
+        metadata = workflow_config.get("metadata", {})
         dag_workflow = DAGWorkflow(
             id=workflow_config.get("id", f"workflow-{namespace}"),
-            name=workflow_config.get("name", f"{namespace} 工作流"),
-            description=workflow_config.get("description", ""),
+            name=metadata.get("name", f"{namespace} 工作流"),
+            description=metadata.get("description", ""),
             namespace=namespace,
             nodes=nodes,
             edges=edges
