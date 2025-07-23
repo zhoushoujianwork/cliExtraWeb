@@ -36,7 +36,7 @@ function sendMessage() {
     // 清空输入框并重置高度
     messageInput.value = '';
     messageInput.style.height = 'auto';
-    messageInput.style.height = '36px'; // 更新为新的最小高度
+    messageInput.style.height = '40px'; // 更新为新的最小高度
     
     // 更新工具栏按钮状态
     updateToolbarButtonStates();
@@ -878,7 +878,7 @@ function clearMessageInput() {
     if (messageInput) {
         messageInput.value = '';
         messageInput.style.height = 'auto';
-        messageInput.style.height = '36px'; // 更新为新的最小高度
+        messageInput.style.height = '40px'; // 更新为新的最小高度
         messageInput.focus();
         
         // 更新工具栏按钮状态
