@@ -20,24 +20,24 @@
 }
 
 .left-panel {
-    width: 300px;
-    min-width: 250px;
+    width: 280px;
+    min-width: 200px;
     max-width: 400px;
     resize: horizontal;
     overflow: auto;
 }
 
 .center-panel {
-    flex: 1;
-    min-width: 400px;
+    flex: 2;
+    min-width: 500px;
     display: flex;
     flex-direction: column;
 }
 
 .right-panel {
-    width: 350px;
-    min-width: 300px;
-    max-width: 500px;
+    width: 300px;
+    min-width: 250px;
+    max-width: 450px;
     resize: horizontal;
     overflow: hidden;
     display: flex;
@@ -124,8 +124,8 @@
 <div class="three-column-layout">
     <!-- 左侧：实例管理 -->
     <div class="left-panel">
-        <div class="card h-100">
-            <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="card h-100 d-flex flex-column">
+            <div class="card-header d-flex justify-content-between align-items-center flex-shrink-0">
                 <h5 class="mb-0"><i class="fas fa-server"></i> Q CLI 实例</h5>
                 <div class="btn-group btn-group-sm">
                     <button class="btn btn-success" onclick="createInstance()" title="创建新实例">
@@ -136,7 +136,7 @@
                     </button>
                 </div>
             </div>
-            <div class="card-body">
+            <div class="card-body flex-grow-1 overflow-auto p-2">
                 <div id="instancesList">
                     <!-- 实例列表将通过JavaScript动态加载 -->
                 </div>
@@ -144,8 +144,25 @@
         </div>
     </div>
 
-    <!-- 中间：聊天区域 -->
+    <!-- 中间：终端输出 -->
     <div class="center-panel">
+        <div class="card h-100">
+            <div class="terminal-header">
+                <span><i class="fas fa-terminal"></i> 终端输出</span>
+                <div>
+                    <button class="btn btn-sm btn-outline-light" onclick="clearTerminal()" title="清空终端">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="terminal-body">
+                <div id="terminal"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧：聊天区域 -->
+    <div class="right-panel">
         <div class="card chat-container">
             <div class="card-header">
                 <h5 class="mb-0"><i class="fas fa-comments"></i> 聊天记录</h5>
@@ -158,23 +175,6 @@
                     <input type="text" id="messageInput" class="form-control" placeholder="输入消息...">
                     <button class="btn btn-primary" onclick="sendMessage()">发送</button>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 右侧：终端输出 -->
-    <div class="right-panel">
-        <div class="card h-100">
-            <div class="terminal-header">
-                <span><i class="fas fa-terminal"></i> 终端输出</span>
-                <div>
-                    <button class="btn btn-sm btn-outline-light" onclick="clearTerminal()" title="清空终端">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="terminal-body">
-                <div id="terminal"></div>
             </div>
         </div>
     </div>
