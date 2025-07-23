@@ -29,22 +29,65 @@ async function loadChatHistory() {
     
     try {
         isLoadingHistory = true;
+        console.log('开始加载聊天历史...');
         
         const namespace = getCurrentNamespace() || 'q_cli';
+        console.log('使用 namespace:', namespace);
+        
         const response = await fetch(`/api/instances?namespace=${namespace}`);
         const data = await response.json();
         
-        if (data.success && data.chat_history) {
-            chatHistory = data.chat_history;
-            renderChatHistory();
+        console.log('API 响应:', data);
+        
+        if (data.success) {
+            if (data.chat_history && data.chat_history.length > 0) {
+                chatHistory = data.chat_history;
+                console.log('加载了', chatHistory.length, '条聊天历史');
+                renderChatHistory();
+            } else {
+                console.log('没有聊天历史数据，尝试刷新缓存...');
+                // 如果没有聊天历史，尝试刷新缓存
+                await refreshChatCacheInternal(namespace);
+            }
         } else {
-            console.log('没有聊天历史数据');
+            console.error('获取实例列表失败:', data.error);
+            showNotification('加载聊天历史失败: ' + data.error, 'error');
         }
     } catch (error) {
         console.error('加载聊天历史失败:', error);
         showNotification('加载聊天历史失败: ' + error.message, 'error');
     } finally {
         isLoadingHistory = false;
+    }
+}
+
+// 内部刷新缓存函数（不显示按钮状态）
+async function refreshChatCacheInternal(namespace) {
+    try {
+        console.log('内部刷新缓存，namespace:', namespace);
+        
+        const response = await fetch('/api/chat/refresh-cache', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                namespace: namespace
+            })
+        });
+        
+        const data = await response.json();
+        console.log('刷新缓存响应:', data);
+        
+        if (data.success) {
+            chatHistory = data.history || [];
+            renderChatHistory();
+            console.log('缓存刷新成功，加载了', data.count, '条历史记录');
+        } else {
+            console.error('刷新聊天缓存失败:', data.error);
+        }
+    } catch (error) {
+        console.error('刷新聊天缓存异常:', error);
     }
 }
 

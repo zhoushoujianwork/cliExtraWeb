@@ -65,19 +65,25 @@ class ChatManager:
                 '~/Library/Application Support/cliExtra/namespaces/{}/namespace_cache.json'.format(namespace)
             )
             
+            print('尝试加载缓存文件: {}'.format(cache_file))
+            
             if not os.path.exists(cache_file):
                 self.add_system_log('Namespace 缓存文件不存在: {}'.format(cache_file))
+                print('缓存文件不存在: {}'.format(cache_file))
                 return
             
-            with open(cache_file, 'r', encoding='utf-8') as f:
+            with open(cache_file, 'r') as f:
                 cache_data = json.load(f)
+            
+            print('缓存文件加载成功，数据键: {}'.format(list(cache_data.keys())))
             
             # 加载消息历史
             message_history = cache_data.get('message_history', [])
+            print('找到 {} 条历史消息'.format(len(message_history)))
             
             # 转换为 ChatMessage 对象并添加到历史记录
             loaded_count = 0
-            for msg_data in message_history:
+            for i, msg_data in enumerate(message_history):
                 try:
                     # 解析时间戳
                     timestamp_str = msg_data.get('timestamp', '')
@@ -85,7 +91,11 @@ class ChatManager:
                         # 处理 ISO 格式的时间戳
                         if timestamp_str.endswith('Z'):
                             timestamp_str = timestamp_str[:-1] + '+00:00'
-                        timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                        try:
+                            timestamp = datetime.fromisoformat(timestamp_str)
+                        except:
+                            # 如果解析失败，尝试其他格式
+                            timestamp = datetime.strptime(timestamp_str.replace('Z', ''), '%Y-%m-%dT%H:%M:%S')
                     else:
                         timestamp = datetime.now()
                     
@@ -103,15 +113,25 @@ class ChatManager:
                         self.chat_history.append(chat_msg)
                         loaded_count += 1
                         
+                    if i < 3:  # 打印前3条消息用于调试
+                        print('消息 {}: {} - {}'.format(i+1, msg_data.get('instance_id', 'unknown'), msg_data.get('message', '')[:50]))
+                        
                 except Exception as e:
+                    print('解析消息 {} 失败: {}'.format(i, str(e)))
                     self.add_system_log('解析消息失败: {}'.format(str(e)))
                     continue
             
             self.namespace_cache_loaded = True
-            self.add_system_log('从 namespace 缓存加载了 {} 条历史消息'.format(loaded_count))
+            success_msg = '从 namespace 缓存加载了 {} 条历史消息'.format(loaded_count)
+            self.add_system_log(success_msg)
+            print(success_msg)
             
         except Exception as e:
-            self.add_system_log('加载 namespace 缓存失败: {}'.format(str(e)))
+            error_msg = '加载 namespace 缓存失败: {}'.format(str(e))
+            self.add_system_log(error_msg)
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
     
     def _is_duplicate_message(self, new_msg: ChatMessage) -> bool:
         """检查是否为重复消息"""

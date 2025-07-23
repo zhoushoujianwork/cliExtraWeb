@@ -1314,6 +1314,37 @@ def create_namespace():
             'error': str(e)
         }), 500
 
+@bp.route('/chat/test-cache', methods=['GET'])
+def test_chat_cache():
+    """测试聊天历史缓存加载"""
+    try:
+        namespace = request.args.get('namespace', 'q_cli')
+        
+        # 强制重新加载缓存
+        chat_manager.namespace_cache_loaded = False
+        chat_manager.load_namespace_cache_history(namespace)
+        
+        # 获取历史记录
+        history = chat_manager.get_chat_history(limit=10, namespace=namespace)
+        
+        return jsonify({
+            'success': True,
+            'message': '缓存测试完成',
+            'history': history,
+            'count': len(history),
+            'cache_loaded': chat_manager.namespace_cache_loaded
+        })
+        
+    except Exception as e:
+        logger.error("测试聊天历史缓存失败: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
 @bp.route('/chat/refresh-cache', methods=['POST'])
 def refresh_chat_cache():
     """刷新聊天历史缓存"""
