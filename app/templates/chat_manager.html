@@ -578,7 +578,12 @@
                     <!-- 路径输入 -->
                     <div class="mb-3">
                         <label for="instancePath" class="form-label">路径</label>
-                        <input type="text" class="form-control" id="instancePath" placeholder="请输入本地路径或Git地址" required>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="instancePath" placeholder="请输入本地路径或Git地址" required>
+                            <button class="btn btn-outline-secondary" type="button" id="browsePathBtn" onclick="browsePath()" title="浏览本地目录">
+                                <i class="fas fa-folder-open"></i> 浏览
+                            </button>
+                        </div>
                         <div class="form-text" id="pathHelpText">
                             <i class="fas fa-info-circle"></i> 
                             请输入本地目录的绝对路径
@@ -1008,14 +1013,127 @@ function updatePathHelpText() {
     const isLocal = document.getElementById('localPath').checked;
     const helpText = document.getElementById('pathHelpText');
     const pathInput = document.getElementById('instancePath');
+    const browseBtn = document.getElementById('browsePathBtn');
     
     if (isLocal) {
-        helpText.innerHTML = '<i class="fas fa-info-circle"></i> 请输入本地目录的绝对路径';
+        helpText.innerHTML = '<i class="fas fa-info-circle"></i> 请输入本地目录的绝对路径，或点击"浏览"选择目录';
         pathInput.placeholder = '例如: /Users/username/project';
+        browseBtn.style.display = 'block';
+        browseBtn.disabled = false;
     } else {
         helpText.innerHTML = '<i class="fas fa-info-circle"></i> 请输入Git仓库地址';
         pathInput.placeholder = '例如: https://github.com/user/repo.git';
+        browseBtn.style.display = 'none';
+        browseBtn.disabled = true;
     }
+}
+
+// 浏览本地路径
+async function browsePath() {
+    try {
+        // 使用HTML5 File API的目录选择功能
+        if ('showDirectoryPicker' in window) {
+            // 现代浏览器支持目录选择
+            const dirHandle = await window.showDirectoryPicker();
+            const pathInput = document.getElementById('instancePath');
+            
+            // 构建路径字符串
+            let fullPath = dirHandle.name;
+            
+            // 尝试获取完整路径（如果浏览器支持）
+            if (dirHandle.resolve) {
+                try {
+                    const pathSegments = await dirHandle.resolve();
+                    if (pathSegments && pathSegments.length > 0) {
+                        fullPath = '/' + pathSegments.join('/');
+                    }
+                } catch (e) {
+                    console.log('无法获取完整路径，使用目录名:', e);
+                }
+            }
+            
+            pathInput.value = fullPath;
+            
+            // 显示成功提示
+            showNotification(`已选择目录: ${dirHandle.name}`, 'success');
+            
+        } else {
+            // 降级方案：显示手动输入提示
+            showDirectoryInputHelper();
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            // 用户取消选择
+            console.log('用户取消了目录选择');
+        } else {
+            console.error('浏览目录失败:', error);
+            showDirectoryInputHelper();
+        }
+    }
+}
+
+// 显示目录输入帮助
+function showDirectoryInputHelper() {
+    const helpModal = document.createElement('div');
+    helpModal.className = 'modal fade';
+    helpModal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-folder-open"></i> 选择本地目录
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>目录选择帮助</strong>
+                    </div>
+                    <p>请手动输入本地目录的完整路径，例如：</p>
+                    <ul>
+                        <li><code>/Users/username/Documents/project</code></li>
+                        <li><code>/home/user/workspace/myapp</code></li>
+                        <li><code>C:\\Users\\username\\Documents\\project</code> (Windows)</li>
+                    </ul>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>注意：</strong>请确保路径存在且有读写权限
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">当前工作目录参考：</label>
+                        <input type="text" class="form-control" value="${window.location.origin}" readonly>
+                        <div class="form-text">您可以基于当前位置输入相对路径</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-primary" onclick="fillCurrentDirectory()" data-bs-dismiss="modal">
+                        <i class="fas fa-folder"></i> 使用当前目录
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(helpModal);
+    const modal = new bootstrap.Modal(helpModal);
+    modal.show();
+    
+    // 模态框关闭后清理
+    helpModal.addEventListener('hidden.bs.modal', () => {
+        document.body.removeChild(helpModal);
+    });
+}
+
+// 填入当前目录
+function fillCurrentDirectory() {
+    const pathInput = document.getElementById('instancePath');
+    // 使用一个合理的默认路径
+    const defaultPath = '/Users/' + (navigator.userAgent.includes('Mac') ? 'username' : 'user') + '/Documents';
+    pathInput.value = defaultPath;
+    pathInput.focus();
+    pathInput.select();
 }
 
 async function createInstanceFromModal() {
