@@ -18,36 +18,46 @@ bp = Blueprint('workflow_api', __name__)
 def list_workflows():
     """获取工作流列表"""
     try:
+        from app.services.dag_workflow_service import dag_workflow_service
+        
         namespace = request.args.get('namespace', 'default')
         
-        # 读取真实的工作流数据
-        workflow_dir = os.path.join(os.getcwd(), '.amazonq', 'workflows', namespace)
+        # 获取可用的namespace列表
+        available_namespaces = ['default', 'simple_dev', 'test', 'q_cli']
         workflows = []
         
-        if os.path.exists(workflow_dir):
-            for filename in os.listdir(workflow_dir):
-                if filename.endswith('.json'):
-                    try:
-                        filepath = os.path.join(workflow_dir, filename)
-                        with open(filepath, 'r') as f:
-                            workflow_data = json.load(f)
-                        
-                        # 提取列表需要的信息
-                        workflow_info = {
-                            "id": workflow_data.get("id", filename[:-5]),
-                            "name": workflow_data.get("name", "未命名工作流"),
-                            "description": workflow_data.get("description", ""),
-                            "version": workflow_data.get("version", "1.0.0"),
-                            "created_at": workflow_data.get("created_at", ""),
-                            "updated_at": workflow_data.get("updated_at", ""),
-                            "node_count": len(workflow_data.get("nodes", [])),
-                            "edge_count": len(workflow_data.get("edges", [])),
-                            "status": "active"
-                        }
-                        workflows.append(workflow_info)
-                    except Exception as e:
-                        logger.error("读取工作流文件失败 {}: {}".format(filename, e))
-                        continue
+        # 如果指定了namespace，只获取该namespace的workflow
+        if namespace and namespace != 'all':
+            namespaces_to_check = [namespace]
+        else:
+            namespaces_to_check = available_namespaces
+        
+        for ns in namespaces_to_check:
+            try:
+                # 使用DAG服务获取workflow配置
+                dag_result = dag_workflow_service.get_dag_structure(ns)
+                
+                if dag_result.get("success") and dag_result.get("dag"):
+                    dag_data = dag_result["dag"]
+                    
+                    workflow_info = {
+                        "id": dag_data.get("id", f"workflow-{ns}"),
+                        "name": dag_data.get("name", f"{ns} 工作流"),
+                        "description": dag_data.get("description", ""),
+                        "namespace": ns,
+                        "version": "2.0",
+                        "created_at": datetime.now().isoformat(),
+                        "updated_at": datetime.now().isoformat(),
+                        "node_count": len(dag_data.get("nodes", [])),
+                        "edge_count": len(dag_data.get("edges", [])),
+                        "status": dag_data.get("status", "active"),
+                        "current_node": dag_data.get("current_node")
+                    }
+                    workflows.append(workflow_info)
+                    
+            except Exception as e:
+                logger.warning(f"获取namespace {ns} 的workflow失败: {str(e)}")
+                continue
         
         # 按更新时间排序
         workflows.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
@@ -55,7 +65,8 @@ def list_workflows():
         return jsonify({
             'success': True,
             'workflows': workflows,
-            'namespace': namespace
+            'namespace': namespace,
+            'total': len(workflows)
         })
         
     except Exception as e:

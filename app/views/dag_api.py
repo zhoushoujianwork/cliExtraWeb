@@ -46,6 +46,14 @@ def get_dag_structure():
                         # 如果没有分配实例，自动分配首选实例
                         if not node.get("instance_id") and role_mapping.preferred_instance:
                             node["instance_id"] = role_mapping.preferred_instance
+                
+                # 确保status是字符串而不是枚举
+                if "status" in node and hasattr(node["status"], "value"):
+                    node["status"] = node["status"].value
+                
+                # 确保type是字符串而不是枚举
+                if "type" in node and hasattr(node["type"], "value"):
+                    node["type"] = node["type"].value
             
             return jsonify(result)
         else:

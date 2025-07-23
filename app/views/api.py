@@ -1155,14 +1155,14 @@ def upload_temp_image():
 def clean_temp_images():
     """清理临时图片文件"""
     try:
-        import tempfile
         import os
         import glob
         
-        temp_dir = tempfile.gettempdir()
-        cliextra_temp_dir = os.path.join(temp_dir, 'cliExtraWeb_images')
+        # 使用 cliExtra 配置目录
+        cliextra_dir = os.path.expanduser('~/Library/Application Support/cliExtra')
+        temp_dir = os.path.join(cliextra_dir, 'temp_images')
         
-        if not os.path.exists(cliextra_temp_dir):
+        if not os.path.exists(temp_dir):
             return jsonify({
                 'success': True,
                 'message': '临时目录不存在',
@@ -1170,7 +1170,7 @@ def clean_temp_images():
             })
         
         # 获取所有临时图片文件
-        pattern = os.path.join(cliextra_temp_dir, 'temp_image_*')
+        pattern = os.path.join(temp_dir, 'temp_image_*')
         temp_files = glob.glob(pattern)
         
         cleaned_count = 0
@@ -1227,8 +1227,9 @@ def upload_image():
                 'error': f'不支持的文件类型: {file_extension}'
             }), 400
         
-        # 创建临时目录
-        temp_dir = os.path.join(os.getcwd(), 'temp_images')
+        # 创建临时目录 - 使用 cliExtra 配置目录
+        cliextra_dir = os.path.expanduser('~/Library/Application Support/cliExtra')
+        temp_dir = os.path.join(cliextra_dir, 'temp_images')
         os.makedirs(temp_dir, exist_ok=True)
         
         # 生成文件名

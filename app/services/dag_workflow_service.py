@@ -93,21 +93,37 @@ class DAGWorkflowService:
         """从cliExtra配置加载工作流"""
         try:
             # 尝试执行 qq workflow show 命令
+            cmd = ["qq", "workflow", "show"]
+            if namespace and namespace != "default":
+                cmd.append(namespace)
+            
             result = subprocess.run(
-                ["qq", "workflow", "show", namespace],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=10
             )
             
             if result.returncode == 0 and result.stdout.strip():
-                try:
-                    return json.loads(result.stdout)
-                except json.JSONDecodeError:
-                    logger.warning(f"无法解析workflow配置: {result.stdout}")
+                # 解析输出，提取JSON部分
+                output = result.stdout.strip()
+                
+                # 查找JSON开始位置
+                json_start = output.find('{')
+                if json_start != -1:
+                    json_str = output[json_start:]
+                    try:
+                        return json.loads(json_str)
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"无法解析workflow配置JSON: {str(e)}")
+                        logger.debug(f"JSON内容: {json_str[:200]}...")
+                        return None
+                else:
+                    logger.warning(f"在输出中未找到JSON: {output[:200]}...")
                     return None
             else:
-                logger.info(f"Namespace {namespace} 没有workflow配置")
+                logger.info(f"Namespace {namespace} 没有workflow配置或命令执行失败")
+                logger.debug(f"stderr: {result.stderr}")
                 return None
                 
         except subprocess.TimeoutExpired:
