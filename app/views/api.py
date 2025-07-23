@@ -53,6 +53,17 @@ def start_instance_with_config():
         path = data.get('path', '').strip()
         role = data.get('role', '').strip()
         namespace = data.get('namespace', '').strip()
+        path_type = data.get('path_type', 'local').strip()
+        
+        # 如果是Git地址，先克隆到本地
+        if path_type == 'git' and path:
+            clone_result = instance_manager.clone_git_repository(path, name)
+            if not clone_result['success']:
+                return jsonify(clone_result), 400
+            
+            # 使用克隆后的本地路径
+            path = clone_result['local_path']
+            chat_manager.add_system_log(f'Git仓库已克隆到: {path}')
         
         result = instance_manager.create_instance_with_config(
             name=name if name else None,
@@ -68,6 +79,8 @@ def start_instance_with_config():
                 chat_manager.add_system_log(f'实例 {instance_id} 已设置namespace: {namespace}')
             if role:
                 chat_manager.add_system_log(f'实例 {instance_id} 已应用角色: {role}')
+            if path_type == 'git':
+                chat_manager.add_system_log(f'实例 {instance_id} 基于Git仓库创建')
         else:
             chat_manager.add_system_log(f'实例启动失败: {result["error"]}')
         

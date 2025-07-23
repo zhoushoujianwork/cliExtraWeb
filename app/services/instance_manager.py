@@ -832,7 +832,94 @@ class InstanceManager:
             logger.error(f'创建配置实例失败: {str(e)}')
             return {'success': False, 'error': str(e)}
     
-    def _apply_role_to_instance(self, instance_name: Optional[str], role: str):
+    def clone_git_repository(self, git_url: str, instance_name: Optional[str] = None) -> Dict[str, any]:
+        """克隆Git仓库到默认项目目录"""
+        try:
+            import os
+            import re
+            from urllib.parse import urlparse
+            from app.services.project_config import project_config
+            
+            # 解析Git URL获取仓库名
+            if git_url.endswith('.git'):
+                repo_name = os.path.basename(git_url)[:-4]  # 移除.git后缀
+            else:
+                repo_name = os.path.basename(urlparse(git_url).path)
+            
+            if not repo_name:
+                return {'success': False, 'error': '无法从Git URL解析仓库名称'}
+            
+            # 获取默认项目目录
+            default_projects_dir = project_config.get_default_projects_dir()
+            
+            # 确定本地目录名（根据配置策略）
+            naming_strategy = project_config.get_git_clone_naming()
+            if naming_strategy == 'instance_name' and instance_name:
+                local_dir_name = instance_name
+            else:
+                local_dir_name = repo_name
+            
+            local_path = os.path.join(default_projects_dir, local_dir_name)
+            
+            # 如果目录已存在，添加数字后缀
+            original_path = local_path
+            counter = 1
+            while os.path.exists(local_path):
+                local_path = f"{original_path}_{counter}"
+                counter += 1
+            
+            logger.info(f'开始克隆Git仓库: {git_url} -> {local_path}')
+            
+            # 执行git clone命令
+            cmd = ['git', 'clone', git_url, local_path]
+            timeout = project_config.get_git_clone_timeout()
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True, text=True, timeout=timeout
+            )
+            
+            if result.returncode != 0:
+                error_msg = f'Git克隆失败: {result.stderr}'
+                logger.error(error_msg)
+                
+                # 清理可能创建的空目录
+                if os.path.exists(local_path) and not os.listdir(local_path):
+                    try:
+                        os.rmdir(local_path)
+                    except:
+                        pass
+                
+                return {'success': False, 'error': error_msg}
+            
+            logger.info(f'Git仓库克隆成功: {local_path}')
+            
+            return {
+                'success': True,
+                'local_path': local_path,
+                'repo_name': repo_name,
+                'projects_dir': default_projects_dir,
+                'message': f'Git仓库已克隆到: {local_path}'
+            }
+            
+        except subprocess.TimeoutExpired:
+            error_msg = f'Git克隆超时（{project_config.get_git_clone_timeout()}秒）'
+            logger.error(error_msg)
+            
+            # 清理可能创建的空目录
+            if 'local_path' in locals() and os.path.exists(local_path):
+                try:
+                    import shutil
+                    shutil.rmtree(local_path)
+                    logger.info(f'已清理超时的克隆目录: {local_path}')
+                except:
+                    pass
+            
+            return {'success': False, 'error': error_msg}
+        except Exception as e:
+            error_msg = f'Git克隆失败: {str(e)}'
+            logger.error(error_msg)
+            return {'success': False, 'error': error_msg}
         """为实例应用角色配置"""
         try:
             if not instance_name:

@@ -1002,10 +1002,66 @@ function updatePathHelpText() {
         browseBtn.style.display = 'block';
         browseBtn.disabled = false;
     } else {
-        helpText.innerHTML = '<i class="fas fa-info-circle"></i> 请输入Git仓库地址';
+        // 获取默认项目目录并显示
+        fetch('/api/config/projects-dir')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    helpText.innerHTML = `<i class="fas fa-info-circle"></i> 请输入Git仓库地址，将自动克隆到: <code>${data.projects_dir}</code>`;
+                } else {
+                    helpText.innerHTML = '<i class="fas fa-info-circle"></i> 请输入Git仓库地址，将自动克隆到默认项目目录';
+                }
+            })
+            .catch(() => {
+                helpText.innerHTML = '<i class="fas fa-info-circle"></i> 请输入Git仓库地址，将自动克隆到默认项目目录';
+            });
+        
         pathInput.placeholder = '例如: https://github.com/user/repo.git';
         browseBtn.style.display = 'none';
         browseBtn.disabled = true;
+    }
+}
+
+// Git URL验证
+async function validateGitUrl(url) {
+    try {
+        const response = await fetch('/api/config/validate-git-url', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({url: url})
+        });
+        
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        return {
+            success: false,
+            error: '验证Git URL失败: ' + error.message
+        };
+    }
+}
+
+// 增强的路径验证
+async function validatePath(path, isLocal) {
+    if (!path.trim()) {
+        return {success: false, error: '路径不能为空'};
+    }
+    
+    if (isLocal) {
+        // 本地路径验证
+        try {
+            const response = await fetch('/api/validate-path', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({path: path})
+            });
+            return await response.json();
+        } catch (error) {
+            return {success: false, error: '验证本地路径失败: ' + error.message};
+        }
+    } else {
+        // Git URL验证
+        return await validateGitUrl(path);
     }
 }
 
