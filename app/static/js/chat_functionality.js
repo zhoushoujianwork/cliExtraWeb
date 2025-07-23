@@ -327,7 +327,9 @@ function updateAvailableInstances(instances) {
 // 获取当前命名空间
 function getCurrentNamespace() {
     // 从 simple_namespace.js 获取当前命名空间
-    return window.currentNamespace || null;
+    const namespace = window.currentNamespace || null;
+    console.log('getCurrentNamespace 调用，返回:', namespace);
+    return namespace;
 }
 
 // 初始化聊天功能

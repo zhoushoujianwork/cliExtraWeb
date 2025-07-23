@@ -6,6 +6,9 @@
 let currentNamespace = '';
 let allInstances = [];
 
+// 暴露到全局作用域供其他模块使用
+window.currentNamespace = currentNamespace;
+
 // 缓存键名
 const NAMESPACE_CACHE_KEY = 'cliExtraWeb_selectedNamespace';
 
@@ -99,6 +102,7 @@ function switchNamespace() {
     const newNamespace = select.value;
     if (newNamespace !== currentNamespace) {
         currentNamespace = newNamespace;
+        window.currentNamespace = currentNamespace; // 同步到全局作用域
         storeNamespace(currentNamespace);
         
         console.log('切换到namespace:', currentNamespace || '全部');
@@ -176,6 +180,11 @@ function updateInstancesList(instances) {
         instancesList.appendChild(instanceDiv);
     });
     
+    // 更新聊天功能的可用实例列表
+    if (typeof updateAvailableInstances === 'function') {
+        updateAvailableInstances(instances);
+    }
+    
     // 尝试自动恢复上次选择的实例
     if (window.terminalMemory) {
         window.terminalMemory.autoRestoreTerminalSelection(instances, (instanceId) => {
@@ -219,6 +228,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const storedNamespace = getStoredNamespace();
     if (storedNamespace) {
         currentNamespace = storedNamespace;
+        window.currentNamespace = currentNamespace; // 同步到全局作用域
         console.log('从缓存中恢复 namespace:', currentNamespace);
     }
     
