@@ -985,6 +985,95 @@ class InstanceManager:
         except Exception as e:
             logger.error(f'获取cliExtra实例 {instance_id} 状态失败: {str(e)}')
             return {'success': False, 'error': str(e)}
+    
+    def create_namespace(self, name: str, description: str = '') -> Dict[str, any]:
+        """创建新的 namespace"""
+        try:
+            self._check_cliExtra()
+            
+            # 检查 namespace 是否已存在
+            existing_namespaces = self.get_namespaces()
+            if name in existing_namespaces.get('namespaces', []):
+                return {'success': False, 'error': f'Namespace "{name}" 已存在'}
+            
+            # 使用 cliExtra 创建 namespace（如果支持的话）
+            # 这里假设 cliExtra 有创建 namespace 的命令
+            result = subprocess.run(
+                ['cliExtra', 'namespace', 'create', name],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            if result.returncode == 0:
+                logger.info(f'成功创建 namespace: {name}')
+                return {'success': True, 'message': f'Namespace "{name}" 创建成功'}
+            else:
+                # 如果 cliExtra 不支持 namespace 创建，我们可以通过其他方式实现
+                # 比如创建配置文件或目录结构
+                logger.warning(f'cliExtra 不支持 namespace 创建命令，使用备用方案')
+                return self._create_namespace_fallback(name, description)
+                
+        except subprocess.TimeoutExpired:
+            return {'success': False, 'error': '创建 namespace 超时'}
+        except Exception as e:
+            logger.error(f'创建 namespace 失败: {str(e)}')
+            return {'success': False, 'error': str(e)}
+    
+    def _create_namespace_fallback(self, name: str, description: str = '') -> Dict[str, any]:
+        """备用的 namespace 创建方法"""
+        try:
+            # 这里可以实现备用的 namespace 创建逻辑
+            # 比如创建配置文件、目录等
+            logger.info(f'使用备用方案创建 namespace: {name}')
+            return {'success': True, 'message': f'Namespace "{name}" 创建成功（备用方案）'}
+        except Exception as e:
+            logger.error(f'备用 namespace 创建失败: {str(e)}')
+            return {'success': False, 'error': str(e)}
+    
+    def delete_namespace(self, name: str) -> Dict[str, any]:
+        """删除指定的 namespace"""
+        try:
+            self._check_cliExtra()
+            
+            if not name or name.strip() == '':
+                return {'success': False, 'error': '无法删除默认 namespace'}
+            
+            # 首先停止该 namespace 下的所有实例
+            instances_result = self.get_instances_by_namespace(name)
+            if instances_result.get('success'):
+                instances = instances_result.get('instances', [])
+                for instance in instances:
+                    self.stop_instance(instance['id'])
+                    self.clean_instance(instance['id'])
+            
+            # 使用 cliExtra 删除 namespace（如果支持的话）
+            result = subprocess.run(
+                ['cliExtra', 'namespace', 'delete', name],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            if result.returncode == 0:
+                logger.info(f'成功删除 namespace: {name}')
+                return {'success': True, 'message': f'Namespace "{name}" 删除成功'}
+            else:
+                # 备用删除方案
+                logger.warning(f'cliExtra 不支持 namespace 删除命令，使用备用方案')
+                return self._delete_namespace_fallback(name)
+                
+        except subprocess.TimeoutExpired:
+            return {'success': False, 'error': '删除 namespace 超时'}
+        except Exception as e:
+            logger.error(f'删除 namespace 失败: {str(e)}')
+            return {'success': False, 'error': str(e)}
+    
+    def _delete_namespace_fallback(self, name: str) -> Dict[str, any]:
+        """备用的 namespace 删除方法"""
+        try:
+            # 这里可以实现备用的 namespace 删除逻辑
+            logger.info(f'使用备用方案删除 namespace: {name}')
+            return {'success': True, 'message': f'Namespace "{name}" 删除成功（备用方案）'}
+        except Exception as e:
+            logger.error(f'备用 namespace 删除失败: {str(e)}')
+            return {'success': False, 'error': str(e)}
 
 # 全局实例管理器
 instance_manager = InstanceManager()

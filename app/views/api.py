@@ -419,126 +419,7 @@ def replay_conversations(target_type, target_name):
         logger.error("回放 {target_type} {target_name} 对话记录失败: {}\3".format(str(e)))
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@bp.route('/namespaces', methods=['GET'])
-def get_namespaces():
-    """获取所有namespace"""
-    try:
-        # 首先尝试从文件系统获取
-        namespaces = instance_manager.get_available_namespaces()
-        
-        # 同时从当前实例中统计namespace信息
-        instance_manager.sync_screen_instances()
-        instances = instance_manager.get_instances()
-        
-        # 统计每个namespace的实例数量
-        namespace_counts = {}
-        for instance in instances:
-            ns = instance.get('namespace', 'default')
-            namespace_counts[ns] = namespace_counts.get(ns, 0) + 1
-        
-        # 更新namespace信息
-        for ns in namespaces:
-            ns['instance_count'] = namespace_counts.get(ns['name'], 0)
-        
-        # 添加在实例中发现但文件系统中不存在的namespace
-        for ns_name, count in namespace_counts.items():
-            if not any(ns['name'] == ns_name for ns in namespaces):
-                namespaces.append({
-                    'name': ns_name,
-                    'instance_count': count,
-                    'path': ''
-                })
-        
-        return jsonify({
-            'success': True,
-            'namespaces': namespaces
-        })
-    except Exception as e:
-        logger.error("获取namespace列表失败: {}\3".format(str(e)))
-        return jsonify({'success': False, 'error': str(e)}), 500
 
-@bp.route('/namespaces', methods=['POST'])
-def create_namespace():
-    """创建新的namespace"""
-    try:
-        data = request.get_json() or {}
-        name = data.get('name', '').strip()
-        
-        if not name:
-            return jsonify({'success': False, 'error': 'Namespace名称不能为空'}), 400
-        
-        # 使用cliExtra命令创建namespace
-        result = subprocess.run(
-            ['cliExtra', 'ns', 'create', name],
-            capture_output=True, text=True, timeout=10
-        )
-        
-        if result.returncode == 0:
-            return jsonify({
-                'success': True,
-                'message': f'Namespace "{name}" 创建成功'
-            })
-        else:
-            error_msg = result.stderr or result.stdout
-            return jsonify({'success': False, 'error': error_msg}), 400
-            
-    except Exception as e:
-        logger.error("创建namespace失败: {}\3".format(str(e)))
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@bp.route('/namespaces/<namespace>', methods=['DELETE'])
-def delete_namespace(namespace):
-    """删除namespace"""
-    try:
-        force = request.args.get('force', 'false').lower() == 'true'
-        
-        cmd = ['cliExtra', 'ns', 'delete', namespace]
-        if force:
-            cmd.append('--force')
-        
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        
-        if result.returncode == 0:
-            return jsonify({
-                'success': True,
-                'message': f'Namespace "{namespace}" 删除成功'
-            })
-        else:
-            error_msg = result.stderr or result.stdout
-            return jsonify({'success': False, 'error': error_msg}), 400
-            
-    except Exception as e:
-        logger.error("删除namespace {namespace} 失败: {}\3".format(str(e)))
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@bp.route('/instances/<instance_id>/namespace', methods=['PUT'])
-def change_instance_namespace(instance_id):
-    """修改实例的namespace"""
-    try:
-        data = request.get_json() or {}
-        new_namespace = data.get('namespace', '').strip()
-        
-        # 使用cliExtra命令修改namespace
-        result = subprocess.run(
-            ['cliExtra', 'set-ns', instance_id, new_namespace],
-            capture_output=True, text=True, timeout=10
-        )
-        
-        if result.returncode == 0:
-            # 更新本地实例信息
-            instance_manager.sync_screen_instances()
-            
-            return jsonify({
-                'success': True,
-                'message': f'实例 {instance_id} 的namespace已修改为 "{new_namespace or "default"}"'
-            })
-        else:
-            error_msg = result.stderr or result.stdout
-            return jsonify({'success': False, 'error': error_msg}), 400
-            
-    except Exception as e:
-        logger.error("修改实例 {instance_id} namespace失败: {}\3".format(str(e)))
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 @bp.route('/instances/<instance_id>/session-info', methods=['GET'])
 def get_instance_session_info(instance_id):
@@ -1364,4 +1245,93 @@ def upload_image():
         return jsonify({
             'success': False,
             'error': f'上传失败: {str(e)}'
+        }), 500
+
+# Namespace 管理 API
+@bp.route('/namespaces', methods=['GET'])
+def get_namespaces():
+    """获取所有 namespace 列表"""
+    try:
+        result = instance_manager.get_namespaces()
+        return jsonify({
+            'success': True,
+            'namespaces': result.get('namespaces', [])
+        })
+    except Exception as e:
+        logger.error(f"获取 namespace 列表失败: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@bp.route('/namespaces', methods=['POST'])
+def create_namespace():
+    """创建新的 namespace"""
+    try:
+        data = request.get_json()
+        name = data.get('name', '').strip()
+        description = data.get('description', '').strip()
+        
+        if not name:
+            return jsonify({
+                'success': False,
+                'error': 'Namespace 名称不能为空'
+            }), 400
+        
+        # 验证名称格式
+        import re
+        if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+            return jsonify({
+                'success': False,
+                'error': 'Namespace 名称只能包含字母、数字、下划线和连字符'
+            }), 400
+        
+        result = instance_manager.create_namespace(name, description)
+        
+        if result.get('success'):
+            return jsonify({
+                'success': True,
+                'message': f'Namespace "{name}" 创建成功'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', '创建失败')
+            }), 400
+            
+    except Exception as e:
+        logger.error(f"创建 namespace 失败: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@bp.route('/namespaces/<namespace_name>', methods=['DELETE'])
+def delete_namespace(namespace_name):
+    """删除指定的 namespace"""
+    try:
+        if not namespace_name or namespace_name.strip() == '':
+            return jsonify({
+                'success': False,
+                'error': '无法删除默认 namespace'
+            }), 400
+        
+        result = instance_manager.delete_namespace(namespace_name)
+        
+        if result.get('success'):
+            return jsonify({
+                'success': True,
+                'message': f'Namespace "{namespace_name}" 删除成功'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', '删除失败')
+            }), 400
+            
+    except Exception as e:
+        logger.error(f"删除 namespace 失败: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
         }), 500
