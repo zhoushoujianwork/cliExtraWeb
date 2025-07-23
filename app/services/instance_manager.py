@@ -1104,15 +1104,25 @@ class InstanceManager:
         try:
             self._check_cliExtra()
             
-            # 检查 namespace 是否已存在
-            existing_namespaces = self.get_namespaces()
-            if name in existing_namespaces.get('namespaces', []):
-                return {'success': False, 'error': f'Namespace "{name}" 已存在'}
+            # 检查 namespace 是否已存在 - 使用qq ns show命令
+            try:
+                result = subprocess.run(
+                    ['qq', 'ns', 'show', '-o', 'json'],
+                    capture_output=True, text=True, timeout=10
+                )
+                
+                if result.returncode == 0:
+                    import json
+                    data = json.loads(result.stdout)
+                    existing_names = [ns.get('name', '') for ns in data.get('namespaces', [])]
+                    if name in existing_names:
+                        return {'success': False, 'error': f'Namespace "{name}" 已存在'}
+            except Exception as e:
+                logger.warning(f'检查现有namespace失败: {e}')
             
-            # 使用 cliExtra 创建 namespace（如果支持的话）
-            # 这里假设 cliExtra 有创建 namespace 的命令
+            # 使用 qq ns create 创建 namespace
             result = subprocess.run(
-                ['cliExtra', 'namespace', 'create', name],
+                ['qq', 'ns', 'create', name],
                 capture_output=True, text=True, timeout=30
             )
             
@@ -1120,10 +1130,9 @@ class InstanceManager:
                 logger.info(f'成功创建 namespace: {name}')
                 return {'success': True, 'message': f'Namespace "{name}" 创建成功'}
             else:
-                # 如果 cliExtra 不支持 namespace 创建，我们可以通过其他方式实现
-                # 比如创建配置文件或目录结构
-                logger.warning(f'cliExtra 不支持 namespace 创建命令，使用备用方案')
-                return self._create_namespace_fallback(name, description)
+                error_msg = result.stderr or result.stdout or '创建失败'
+                logger.error(f'创建 namespace 失败: {error_msg}')
+                return {'success': False, 'error': f'创建失败: {error_msg}'}
                 
         except subprocess.TimeoutExpired:
             return {'success': False, 'error': '创建 namespace 超时'}

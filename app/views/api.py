@@ -1286,65 +1286,6 @@ def upload_image():
             'error': f'上传失败: {str(e)}'
         }), 500
 
-# Namespace 管理 API
-@bp.route('/namespaces', methods=['GET'])
-def get_namespaces():
-    """获取所有 namespace 列表"""
-    try:
-        result = instance_manager.get_namespaces()
-        return jsonify({
-            'success': True,
-            'namespaces': result.get('namespaces', [])
-        })
-    except Exception as e:
-        logger.error(f"获取 namespace 列表失败: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@bp.route('/namespaces', methods=['POST'])
-def create_namespace():
-    """创建新的 namespace"""
-    try:
-        data = request.get_json()
-        name = data.get('name', '').strip()
-        description = data.get('description', '').strip()
-        
-        if not name:
-            return jsonify({
-                'success': False,
-                'error': 'Namespace 名称不能为空'
-            }), 400
-        
-        # 验证名称格式
-        import re
-        if not re.match(r'^[a-zA-Z0-9_-]+$', name):
-            return jsonify({
-                'success': False,
-                'error': 'Namespace 名称只能包含字母、数字、下划线和连字符'
-            }), 400
-        
-        result = instance_manager.create_namespace(name, description)
-        
-        if result.get('success'):
-            return jsonify({
-                'success': True,
-                'message': f'Namespace "{name}" 创建成功'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': result.get('error', '创建失败')
-            }), 400
-            
-    except Exception as e:
-        logger.error(f"创建 namespace 失败: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
 @bp.route('/chat/test-cache', methods=['GET'])
 def test_chat_cache():
     """测试聊天历史缓存加载"""

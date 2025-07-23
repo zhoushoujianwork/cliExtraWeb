@@ -64,7 +64,7 @@ def test_namespace_api():
     """测试namespace API"""
     print("\n🧪 测试namespace API...")
     
-    base_url = "http://localhost:5000"
+    base_url = "http://localhost:5001"  # 修改为正确的端口
     
     try:
         # 测试获取所有namespace
@@ -113,7 +113,7 @@ def test_namespace_stats_api():
     """测试namespace统计API"""
     print("\n🧪 测试namespace统计API...")
     
-    base_url = "http://localhost:5000"
+    base_url = "http://localhost:5001"  # 修改为正确的端口
     
     try:
         response = requests.get(f"{base_url}/api/namespaces/stats", timeout=10)
