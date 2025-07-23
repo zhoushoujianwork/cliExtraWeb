@@ -301,8 +301,11 @@
             </div>
             <div class="chat-input-area">
                 <div class="input-group">
-                    <textarea id="messageInput" class="form-control auto-resize-textarea" placeholder="输入消息... (Shift+Enter 换行，Enter 发送)" rows="1"></textarea>
-                    <button class="btn btn-primary" onclick="sendMessage()">
+                    <textarea id="messageInput" class="form-control auto-resize-textarea" placeholder="输入消息... (Enter发送, Shift+Enter换行, ESC清空, F1帮助)" rows="1"></textarea>
+                    <button class="btn btn-outline-secondary" onclick="showKeyboardShortcuts()" title="快捷键帮助 (F1)">
+                        <i class="fas fa-keyboard"></i>
+                    </button>
+                    <button class="btn btn-primary" onclick="sendMessage()" title="发送消息 (Enter)">
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
@@ -791,6 +794,18 @@ function initAutoResizeTextarea() {
             // 上箭头键：重新编辑上一条消息（当输入框为空时）
             e.preventDefault();
             recallLastMessage();
+        } else if (e.key === 'ArrowDown' && textarea.value !== '') {
+            // 下箭头键：下一条历史消息
+            e.preventDefault();
+            recallNextMessage();
+        } else if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
+            // Ctrl+数字键：插入快速文本
+            e.preventDefault();
+            insertQuickText(parseInt(e.key));
+        } else if (e.key === 'F1' || (e.ctrlKey && e.key === '/')) {
+            // F1 或 Ctrl+/ 显示快捷键帮助
+            e.preventDefault();
+            showKeyboardShortcuts();
         }
     });
     

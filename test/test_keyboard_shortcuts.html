@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聊天快捷键功能测试</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .test-header {
+            background: #007bff;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .chat-messages {
+            height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        
+        .user-message {
+            background: #e3f2fd;
+            margin-left: 20%;
+        }
+        
+        .system-message {
+            background: #f5f5f5;
+            color: #666;
+            font-style: italic;
+            text-align: center;
+        }
+        
+        .chat-input-area {
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        
+        .shortcuts-info {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .shortcuts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .shortcut-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .shortcut-key {
+            background: #f1f3f4;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: monospace;
+            font-size: 12px;
+            min-width: 60px;
+            text-align: center;
+        }
+        
+        .auto-resize-textarea {
+            min-height: 38px;
+            max-height: 150px;
+            resize: none;
+            overflow-y: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <div class="test-header">
+            <h2><i class="fas fa-keyboard"></i> 聊天快捷键功能测试</h2>
+            <p class="mb-0">测试各种键盘快捷键功能</p>
+        </div>
+        
+        <div class="shortcuts-info">
+            <h5><i class="fas fa-info-circle"></i> 可用快捷键</h5>
+            <div class="shortcuts-grid">
+                <div class="shortcut-item">
+                    <span class="shortcut-key">Enter</span>
+                    <span>发送消息</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">Shift+Enter</span>
+                    <span>换行</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">Esc</span>
+                    <span>清空输入框</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">Ctrl+L</span>
+                    <span>清空聊天记录</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">Ctrl+K</span>
+                    <span>聚焦输入框</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">↑</span>
+                    <span>上一条历史消息</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">↓</span>
+                    <span>下一条历史消息</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">Ctrl+1-9</span>
+                    <span>插入快速文本</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">F1</span>
+                    <span>显示帮助</span>
+                </div>
+            </div>
+        </div>
+        
+        <div id="chatMessages" class="chat-messages">
+            <div class="message system-message">
+                <i class="fas fa-info-circle"></i> 聊天功能已初始化，请开始测试快捷键功能
+            </div>
+        </div>
+        
+        <div class="chat-input-area">
+            <div class="input-group">
+                <textarea id="messageInput" class="form-control auto-resize-textarea" 
+                         placeholder="输入消息... (Enter发送, Shift+Enter换行, ESC清空, F1帮助)" 
+                         rows="1"></textarea>
+                <button class="btn btn-outline-secondary" onclick="showKeyboardShortcuts()" title="快捷键帮助 (F1)">
+                    <i class="fas fa-keyboard"></i>
+                </button>
+                <button class="btn btn-primary" onclick="sendMessage()" title="发送消息 (Enter)">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- 模拟聊天功能的简化版本 -->
+    <script>
+        // 消息历史记录管理
+        let messageHistory = [];
+        let historyIndex = -1;
+
+        // 初始化输入框自动调整大小功能
+        function initAutoResize() {
+            const textarea = document.getElementById('messageInput');
+            if (!textarea) return;
+
+            function autoResize() {
+                textarea.style.height = 'auto';
+                const scrollHeight = textarea.scrollHeight;
+                const maxHeight = 150;
+                textarea.style.height = Math.min(scrollHeight, maxHeight) + 'px';
+                
+                if (scrollHeight > maxHeight) {
+                    textarea.style.overflowY = 'auto';
+                } else {
+                    textarea.style.overflowY = 'hidden';
+                }
+            }
+
+            textarea.addEventListener('input', autoResize);
+
+            // 监听键盘事件
+            textarea.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    if (e.shiftKey) {
+                        return;
+                    } else {
+                        e.preventDefault();
+                        sendMessage();
+                    }
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    clearMessageInput();
+                } else if (e.ctrlKey && e.key === 'l') {
+                    e.preventDefault();
+                    clearChatMessages();
+                } else if (e.ctrlKey && e.key === 'k') {
+                    e.preventDefault();
+                    textarea.focus();
+                } else if (e.key === 'ArrowUp' && textarea.value === '') {
+                    e.preventDefault();
+                    recallLastMessage();
+                } else if (e.key === 'ArrowDown' && textarea.value !== '') {
+                    e.preventDefault();
+                    recallNextMessage();
+                } else if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
+                    e.preventDefault();
+                    insertQuickText(parseInt(e.key));
+                } else if (e.key === 'F1' || (e.ctrlKey && e.key === '/')) {
+                    e.preventDefault();
+                    showKeyboardShortcuts();
+                }
+            });
+
+            autoResize();
+        }
+
+        // 发送消息
+        function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            
+            if (!message) {
+                showNotification('请输入消息', 'warning');
+                return;
+            }
+            
+            saveMessageToHistory(message);
+            addUserMessage(message);
+            
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+            messageInput.style.height = '38px';
+            
+            // 模拟系统响应
+            setTimeout(() => {
+                addSystemMessage(`已收到消息: "${message}"`);
+            }, 500);
+        }
+
+        // 添加用户消息
+        function addUserMessage(message) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message user-message';
+            messageDiv.innerHTML = `
+                <div><strong>用户:</strong> ${escapeHtml(message)}</div>
+                <small class="text-muted">${new Date().toLocaleTimeString()}</small>
+            `;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // 添加系统消息
+        function addSystemMessage(message) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message system-message';
+            messageDiv.innerHTML = `<i class="fas fa-info-circle"></i> ${escapeHtml(message)}`;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // HTML转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initAutoResize();
+        });
+    </script>
+    
+    <!-- 引入完整的快捷键功能 -->
+    <script src="../app/static/js/chat_functionality.js"></script>
+</body>
+</html>

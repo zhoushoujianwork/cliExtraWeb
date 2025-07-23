@@ -17,9 +17,12 @@ function sendMessage() {
     const message = messageInput.value.trim();
     
     if (!message) {
-        alert('请输入消息');
+        showNotification('请输入消息', 'warning');
         return;
     }
+    
+    // 保存消息到历史记录
+    saveMessageToHistory(message);
     
     // 解析@提及
     const { mentions, cleanMessage } = parseMessage(message);
@@ -696,4 +699,393 @@ function copyImageUrl(imageUrl) {
     }).catch(err => {
         console.error('复制失败:', err);
     });
+}
+
+// ==================== 快捷键功能函数 ====================
+
+// 清空消息输入框 (ESC键)
+function clearMessageInput() {
+    const messageInput = document.getElementById('messageInput');
+    if (messageInput) {
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        messageInput.style.height = '38px'; // 重置为最小高度
+        messageInput.focus();
+        
+        // 显示提示
+        showNotification('输入框已清空', 'info', 1000);
+    }
+}
+
+// 清空聊天记录 (Ctrl+L)
+function clearChatMessages() {
+    const chatMessages = document.getElementById('chatMessages');
+    if (chatMessages) {
+        // 显示确认对话框
+        if (confirm('确定要清空所有聊天记录吗？此操作不可撤销。')) {
+            chatMessages.innerHTML = '';
+            
+            // 添加系统消息提示
+            addSystemMessage('聊天记录已清空');
+            
+            // 显示通知
+            showNotification('聊天记录已清空', 'success');
+        }
+    }
+}
+
+// 消息历史记录管理
+let messageHistory = [];
+let historyIndex = -1;
+
+// 保存消息到历史记录
+function saveMessageToHistory(message) {
+    if (message && message.trim()) {
+        // 避免重复保存相同的消息
+        if (messageHistory.length === 0 || messageHistory[messageHistory.length - 1] !== message) {
+            messageHistory.push(message);
+            // 限制历史记录数量
+            if (messageHistory.length > 50) {
+                messageHistory.shift();
+            }
+        }
+        historyIndex = messageHistory.length;
+    }
+}
+
+// 重新编辑上一条消息 (上箭头键)
+function recallLastMessage() {
+    const messageInput = document.getElementById('messageInput');
+    if (!messageInput || messageHistory.length === 0) {
+        return;
+    }
+    
+    if (historyIndex > 0) {
+        historyIndex--;
+        messageInput.value = messageHistory[historyIndex];
+        
+        // 自动调整输入框高度
+        autoResizeTextarea(messageInput);
+        
+        // 将光标移到末尾
+        messageInput.setSelectionRange(messageInput.value.length, messageInput.value.length);
+        
+        // 显示提示
+        showNotification(`历史消息 ${historyIndex + 1}/${messageHistory.length}`, 'info', 1000);
+    }
+}
+
+// 下一条历史消息 (下箭头键)
+function recallNextMessage() {
+    const messageInput = document.getElementById('messageInput');
+    if (!messageInput || messageHistory.length === 0) {
+        return;
+    }
+    
+    if (historyIndex < messageHistory.length - 1) {
+        historyIndex++;
+        messageInput.value = messageHistory[historyIndex];
+        
+        // 自动调整输入框高度
+        autoResizeTextarea(messageInput);
+        
+        // 将光标移到末尾
+        messageInput.setSelectionRange(messageInput.value.length, messageInput.value.length);
+        
+        // 显示提示
+        showNotification(`历史消息 ${historyIndex + 1}/${messageHistory.length}`, 'info', 1000);
+    } else if (historyIndex === messageHistory.length - 1) {
+        // 到达最新消息，清空输入框
+        historyIndex = messageHistory.length;
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        messageInput.style.height = '38px';
+        
+        showNotification('回到当前输入', 'info', 1000);
+    }
+}
+
+// 自动调整文本框高度
+function autoResizeTextarea(textarea) {
+    textarea.style.height = 'auto';
+    const scrollHeight = textarea.scrollHeight;
+    const maxHeight = 150; // 最大高度
+    textarea.style.height = Math.min(scrollHeight, maxHeight) + 'px';
+    
+    // 如果内容超过最大高度，显示滚动条
+    if (scrollHeight > maxHeight) {
+        textarea.style.overflowY = 'auto';
+    } else {
+        textarea.style.overflowY = 'hidden';
+    }
+}
+
+// 快速插入常用文本 (Ctrl+数字键)
+function insertQuickText(textType) {
+    const messageInput = document.getElementById('messageInput');
+    if (!messageInput) return;
+    
+    const quickTexts = {
+        1: '请帮我',
+        2: '谢谢',
+        3: '好的',
+        4: '请稍等',
+        5: '完成了',
+        6: '有问题',
+        7: '需要帮助',
+        8: '正在处理',
+        9: '已解决'
+    };
+    
+    const text = quickTexts[textType];
+    if (text) {
+        const currentValue = messageInput.value;
+        const cursorPos = messageInput.selectionStart;
+        
+        // 在光标位置插入文本
+        const newValue = currentValue.slice(0, cursorPos) + text + currentValue.slice(cursorPos);
+        messageInput.value = newValue;
+        
+        // 设置光标位置到插入文本之后
+        const newCursorPos = cursorPos + text.length;
+        messageInput.setSelectionRange(newCursorPos, newCursorPos);
+        
+        // 自动调整高度
+        autoResizeTextarea(messageInput);
+        
+        // 聚焦输入框
+        messageInput.focus();
+        
+        showNotification(`已插入: ${text}`, 'info', 1000);
+    }
+}
+
+// 显示快捷键帮助 (F1或Ctrl+?)
+function showKeyboardShortcuts() {
+    const shortcuts = [
+        { key: 'Enter', desc: '发送消息' },
+        { key: 'Shift + Enter', desc: '换行' },
+        { key: 'Esc', desc: '清空输入框' },
+        { key: 'Ctrl + L', desc: '清空聊天记录' },
+        { key: 'Ctrl + K', desc: '聚焦到输入框' },
+        { key: '↑ (输入框为空时)', desc: '上一条历史消息' },
+        { key: '↓', desc: '下一条历史消息' },
+        { key: 'Ctrl + 1-9', desc: '插入快速文本' },
+        { key: 'F1 或 Ctrl + ?', desc: '显示快捷键帮助' }
+    ];
+    
+    let helpHtml = `
+        <div class="keyboard-shortcuts-modal">
+            <div class="modal-backdrop" onclick="closeKeyboardShortcuts()"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5><i class="fas fa-keyboard"></i> 键盘快捷键</h5>
+                    <button onclick="closeKeyboardShortcuts()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <table class="shortcuts-table">
+                        <thead>
+                            <tr>
+                                <th>快捷键</th>
+                                <th>功能</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+    `;
+    
+    shortcuts.forEach(shortcut => {
+        helpHtml += `
+            <tr>
+                <td><kbd>${shortcut.key}</kbd></td>
+                <td>${shortcut.desc}</td>
+            </tr>
+        `;
+    });
+    
+    helpHtml += `
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeKeyboardShortcuts()">关闭</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 添加样式
+    const style = document.createElement('style');
+    style.textContent = `
+        .keyboard-shortcuts-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .keyboard-shortcuts-modal .modal-backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+        }
+        
+        .keyboard-shortcuts-modal .modal-content {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow: auto;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .keyboard-shortcuts-modal .modal-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .keyboard-shortcuts-modal .modal-header h5 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .keyboard-shortcuts-modal .modal-header button {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+        }
+        
+        .keyboard-shortcuts-modal .modal-body {
+            padding: 20px;
+        }
+        
+        .shortcuts-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .shortcuts-table th,
+        .shortcuts-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .shortcuts-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        
+        .shortcuts-table kbd {
+            background: #f1f3f4;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .keyboard-shortcuts-modal .modal-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #dee2e6;
+            text-align: right;
+        }
+    `;
+    
+    document.head.appendChild(style);
+    
+    // 创建模态框
+    const modal = document.createElement('div');
+    modal.innerHTML = helpHtml;
+    modal.id = 'keyboardShortcutsModal';
+    document.body.appendChild(modal);
+    
+    // 添加ESC键关闭
+    document.addEventListener('keydown', handleShortcutsModalKeydown);
+}
+
+// 关闭快捷键帮助
+function closeKeyboardShortcuts() {
+    const modal = document.getElementById('keyboardShortcutsModal');
+    if (modal) {
+        document.body.removeChild(modal);
+        document.removeEventListener('keydown', handleShortcutsModalKeydown);
+    }
+}
+
+// 处理快捷键帮助模态框的键盘事件
+function handleShortcutsModalKeydown(event) {
+    if (event.key === 'Escape') {
+        closeKeyboardShortcuts();
+    }
+}
+
+// 显示通知消息
+function showNotification(message, type = 'info', duration = 3000) {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    
+    // 添加样式
+    const style = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: 6px;
+        color: white;
+        font-size: 14px;
+        z-index: 10000;
+        opacity: 0;
+        transform: translateX(100%);
+        transition: all 0.3s ease;
+        max-width: 300px;
+        word-wrap: break-word;
+    `;
+    
+    notification.style.cssText = style;
+    
+    // 根据类型设置背景色
+    const colors = {
+        info: '#17a2b8',
+        success: '#28a745',
+        warning: '#ffc107',
+        error: '#dc3545'
+    };
+    
+    notification.style.backgroundColor = colors[type] || colors.info;
+    
+    document.body.appendChild(notification);
+    
+    // 动画显示
+    setTimeout(() => {
+        notification.style.opacity = '1';
+        notification.style.transform = 'translateX(0)';
+    }, 10);
+    
+    // 自动隐藏
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                document.body.removeChild(notification);
+            }
+        }, 300);
+    }, duration);
 }
