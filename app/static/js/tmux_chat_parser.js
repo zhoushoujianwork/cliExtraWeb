@@ -278,42 +278,34 @@ class TmuxChatParser {
      */
     filterConversations(conversations) {
         const filtered = [];
-        let hasSeenThinking = false;
         
         for (const conv of conversations) {
             // 过滤掉太短的消息
             if (conv.content.length < 2) continue;
             
-            // 检查是否是 Thinking 消息
+            // 完全过滤掉所有 Thinking 消息
             if (this.isThinkingMessage(conv.content)) {
-                if (!hasSeenThinking) {
-                    // 保留第一个 Thinking 消息
-                    filtered.push(conv);
-                    hasSeenThinking = true;
-                    this.log('📝 保留第一个 Thinking 消息');
-                } else {
-                    // 过滤掉后续的 Thinking 消息
-                    this.log('🗑️ 过滤多余的 Thinking 消息:', conv.content.substring(0, 30));
-                    continue;
-                }
-            } else {
-                // 过滤掉纯系统噪音
-                const systemNoise = [
-                    'Loading...',
-                    'Please wait...',
-                    '请稍等...',
-                    'hi',
-                    '...',
-                    'OK',
-                    'ok'
-                ];
-                
-                if (systemNoise.some(noise => conv.content.trim() === noise)) {
-                    continue;
-                }
-                
-                filtered.push(conv);
+                this.log('🗑️ 过滤 Thinking 消息:', conv.content.substring(0, 30));
+                continue;
             }
+            
+            // 过滤掉纯系统噪音
+            const systemNoise = [
+                'Loading...',
+                'Please wait...',
+                '请稍等...',
+                'hi',
+                '...',
+                'OK',
+                'ok'
+            ];
+            
+            if (systemNoise.some(noise => conv.content.trim() === noise)) {
+                this.log('🗑️ 过滤系统噪音:', conv.content);
+                continue;
+            }
+            
+            filtered.push(conv);
         }
         
         return filtered;
@@ -326,12 +318,12 @@ class TmuxChatParser {
      */
     isThinkingMessage(content) {
         const thinkingPatterns = [
-            /^Thinking\.{3,}$/i,                // Thinking...
-            /^Thinking\.{1,}$/i,                // Thinking.
-            /^正在思考\.{3,}$/,                 // 正在思考...
-            /^思考中\.{3,}$/,                   // 思考中...
-            /^Processing\.{3,}$/i,              // Processing...
-            /^Analyzing\.{3,}$/i,               // Analyzing...
+            /^Thinking\.{0,}$/i,                // Thinking... 或 Thinking
+            /^正在思考\.{0,}$/,                 // 正在思考...
+            /^思考中\.{0,}$/,                   // 思考中...
+            /^Processing\.{0,}$/i,              // Processing...
+            /^Analyzing\.{0,}$/i,               // Analyzing...
+            /^\s*Thinking\.{0,}\s*$/i,          // 带空格的 Thinking
         ];
         
         const trimmedContent = content.trim();
