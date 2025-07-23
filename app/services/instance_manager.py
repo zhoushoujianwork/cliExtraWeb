@@ -832,11 +832,12 @@ class InstanceManager:
             logger.error(f'创建配置实例失败: {str(e)}')
             return {'success': False, 'error': str(e)}
     
-    def clone_git_repository(self, git_url: str, instance_name: Optional[str] = None) -> Dict[str, any]:
+    def clone_git_repository(self, git_url: str, instance_name: Optional[str] = None, 
+                           conflict_resolution: Optional[str] = None) -> Dict[str, any]:
         """克隆Git仓库到默认项目目录"""
         try:
             import os
-            import re
+            import shutil
             from urllib.parse import urlparse
             from app.services.project_config import project_config
             
@@ -861,12 +862,45 @@ class InstanceManager:
             
             local_path = os.path.join(default_projects_dir, local_dir_name)
             
-            # 如果目录已存在，添加数字后缀
-            original_path = local_path
-            counter = 1
-            while os.path.exists(local_path):
-                local_path = f"{original_path}_{counter}"
-                counter += 1
+            # 处理目录冲突
+            if os.path.exists(local_path):
+                if conflict_resolution == 'delete':
+                    # 删除现有目录
+                    logger.info(f'删除现有目录: {local_path}')
+                    shutil.rmtree(local_path)
+                elif conflict_resolution == 'rename':
+                    # 使用新名称（添加数字后缀）
+                    original_path = local_path
+                    counter = 1
+                    while os.path.exists(local_path):
+                        local_path = f"{original_path}_{counter}"
+                        counter += 1
+                    logger.info(f'使用新名称: {local_path}')
+                elif conflict_resolution == 'use':
+                    # 使用现有目录（检查是否为Git仓库）
+                    if os.path.exists(os.path.join(local_path, '.git')):
+                        logger.info(f'使用现有Git仓库: {local_path}')
+                        return {
+                            'success': True,
+                            'local_path': local_path,
+                            'repo_name': repo_name,
+                            'projects_dir': default_projects_dir,
+                            'message': f'使用现有Git仓库: {local_path}',
+                            'reused_existing': True
+                        }
+                    else:
+                        return {
+                            'success': False,
+                            'error': f'目录存在但不是Git仓库: {local_path}'
+                        }
+                else:
+                    # 没有冲突解决方案，返回冲突信息
+                    return {
+                        'success': False,
+                        'error': f'目录已存在: {local_path}',
+                        'directory_exists': True,
+                        'conflict_path': local_path
+                    }
             
             logger.info(f'开始克隆Git仓库: {git_url} -> {local_path}')
             
@@ -899,7 +933,8 @@ class InstanceManager:
                 'local_path': local_path,
                 'repo_name': repo_name,
                 'projects_dir': default_projects_dir,
-                'message': f'Git仓库已克隆到: {local_path}'
+                'message': f'Git仓库已克隆到: {local_path}',
+                'conflict_resolved': conflict_resolution is not None
             }
             
         except subprocess.TimeoutExpired:
@@ -909,7 +944,6 @@ class InstanceManager:
             # 清理可能创建的空目录
             if 'local_path' in locals() and os.path.exists(local_path):
                 try:
-                    import shutil
                     shutil.rmtree(local_path)
                     logger.info(f'已清理超时的克隆目录: {local_path}')
                 except:

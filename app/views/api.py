@@ -54,11 +54,23 @@ def start_instance_with_config():
         role = data.get('role', '').strip()
         namespace = data.get('namespace', '').strip()
         path_type = data.get('path_type', 'local').strip()
+        conflict_resolution = data.get('conflict_resolution', None)
         
         # 如果是Git地址，先克隆到本地
         if path_type == 'git' and path:
-            clone_result = instance_manager.clone_git_repository(path, name)
+            clone_result = instance_manager.clone_git_repository(
+                path, name, conflict_resolution
+            )
             if not clone_result['success']:
+                # 检查是否是目录冲突
+                if 'directory_exists' in clone_result:
+                    return jsonify({
+                        'success': False,
+                        'error': clone_result['error'],
+                        'conflict_type': 'directory_exists',
+                        'conflict_path': clone_result['conflict_path'],
+                        'suggested_actions': ['delete', 'rename', 'use']
+                    }), 409  # Conflict status code
                 return jsonify(clone_result), 400
             
             # 使用克隆后的本地路径
@@ -86,7 +98,7 @@ def start_instance_with_config():
         
         return jsonify(result)
     except Exception as e:
-        logger.error("启动配置实例失败: {}\3".format(str(e)))
+        logger.error("启动配置实例失败: {}".format(str(e)))
         error_msg = f'启动实例失败: {str(e)}'
         chat_manager.add_system_log(error_msg)
         return jsonify({'success': False, 'error': error_msg}), 500

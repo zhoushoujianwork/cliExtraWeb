@@ -229,7 +229,52 @@
     opacity: 0.6;
 }
 
-/* 自适应 textarea 样式 */
+/* 实例创建进度样式 */
+.step-item {
+    padding: 8px 0;
+    border-left: 3px solid #e9ecef;
+    padding-left: 15px;
+    margin-bottom: 5px;
+    transition: all 0.3s ease;
+}
+
+.step-item.active {
+    border-left-color: #007bff;
+    background-color: #f8f9fa;
+}
+
+.step-item.completed {
+    border-left-color: #28a745;
+}
+
+.step-item.error {
+    border-left-color: #dc3545;
+}
+
+.step-item i.fa-check {
+    color: #28a745;
+}
+
+.step-item i.fa-times {
+    color: #dc3545;
+}
+
+.step-item i.fa-spinner {
+    color: #007bff;
+}
+
+#instanceCreationProgressModal .modal-content {
+    border: none;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+#directoryConflictModal .btn {
+    text-align: left;
+}
+
+#directoryConflictModal .btn i {
+    width: 20px;
+}
 .auto-resize-textarea {
     resize: none;
     overflow: hidden;
@@ -609,7 +654,87 @@
     </div>
 </div>
 
-<!-- 删除 Namespace 确认模态框 -->
+<!-- 实例创建进度模态框 -->
+<div class="modal fade" id="instanceCreationProgressModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-cog fa-spin"></i> 创建实例中...
+                </h5>
+            </div>
+            <div class="modal-body text-center">
+                <div class="mb-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                <div id="creationProgressText" class="mb-3">
+                    正在准备创建实例...
+                </div>
+                <div class="progress mb-3">
+                    <div id="creationProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%"></div>
+                </div>
+                <div id="creationSteps" class="text-start">
+                    <div class="step-item" id="step-validate">
+                        <i class="fas fa-clock text-muted"></i> 验证参数...
+                    </div>
+                    <div class="step-item" id="step-clone" style="display: none;">
+                        <i class="fas fa-clock text-muted"></i> 克隆Git仓库...
+                    </div>
+                    <div class="step-item" id="step-create">
+                        <i class="fas fa-clock text-muted"></i> 创建实例...
+                    </div>
+                    <div class="step-item" id="step-complete">
+                        <i class="fas fa-clock text-muted"></i> 完成设置...
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelCreationBtn" onclick="cancelInstanceCreation()">
+                    取消创建
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 目录冲突处理模态框 -->
+<div class="modal fade" id="directoryConflictModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle"></i> 目录冲突
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-folder"></i>
+                    <strong>目录已存在</strong>
+                </div>
+                <p id="conflictDirectoryPath"></p>
+                <p>该目录已经存在，请选择处理方式：</p>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-danger" onclick="handleDirectoryConflict('delete')">
+                        <i class="fas fa-trash"></i> 删除现有目录并重新创建
+                    </button>
+                    <button class="btn btn-primary" onclick="handleDirectoryConflict('rename')">
+                        <i class="fas fa-edit"></i> 使用新名称（自动添加后缀）
+                    </button>
+                    <button class="btn btn-success" onclick="handleDirectoryConflict('use')">
+                        <i class="fas fa-folder-open"></i> 使用现有目录
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            </div>
+        </div>
+    </div>
+</div>
 <div class="modal fade" id="deleteNamespaceModal" tabindex="-1" aria-labelledby="deleteNamespaceModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -1163,7 +1288,189 @@ function showDirectoryInputHelper() {
     });
 }
 
-// 填入当前目录
+// 实例创建进度管理
+let creationAbortController = null;
+let currentConflictData = null;
+
+function showCreationProgress() {
+    const modal = new bootstrap.Modal(document.getElementById('instanceCreationProgressModal'));
+    modal.show();
+    
+    // 重置进度
+    updateCreationProgress(0, '正在准备创建实例...');
+    resetCreationSteps();
+}
+
+function hideCreationProgress() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('instanceCreationProgressModal'));
+    if (modal) {
+        modal.hide();
+    }
+}
+
+function updateCreationProgress(percentage, text) {
+    const progressBar = document.getElementById('creationProgressBar');
+    const progressText = document.getElementById('creationProgressText');
+    
+    if (progressBar) {
+        progressBar.style.width = percentage + '%';
+    }
+    
+    if (progressText) {
+        progressText.textContent = text;
+    }
+}
+
+function updateCreationStep(stepId, status, text) {
+    const stepElement = document.getElementById(stepId);
+    if (!stepElement) return;
+    
+    stepElement.style.display = 'block';
+    stepElement.className = 'step-item ' + status;
+    
+    const icon = stepElement.querySelector('i');
+    const textSpan = stepElement.querySelector('span') || document.createElement('span');
+    
+    switch (status) {
+        case 'active':
+            icon.className = 'fas fa-spinner fa-spin text-primary';
+            break;
+        case 'completed':
+            icon.className = 'fas fa-check text-success';
+            break;
+        case 'error':
+            icon.className = 'fas fa-times text-danger';
+            break;
+        default:
+            icon.className = 'fas fa-clock text-muted';
+    }
+    
+    if (text) {
+        if (!stepElement.querySelector('span')) {
+            stepElement.appendChild(document.createTextNode(' '));
+            stepElement.appendChild(textSpan);
+        }
+        textSpan.textContent = text;
+    }
+}
+
+function resetCreationSteps() {
+    const steps = ['step-validate', 'step-clone', 'step-create', 'step-complete'];
+    steps.forEach(stepId => {
+        const step = document.getElementById(stepId);
+        if (step) {
+            step.className = 'step-item';
+            step.style.display = stepId === 'step-validate' ? 'block' : 'none';
+            const icon = step.querySelector('i');
+            if (icon) {
+                icon.className = 'fas fa-clock text-muted';
+            }
+            const span = step.querySelector('span');
+            if (span) {
+                span.remove();
+            }
+        }
+    });
+}
+
+function cancelInstanceCreation() {
+    if (creationAbortController) {
+        creationAbortController.abort();
+    }
+    hideCreationProgress();
+    showNotification('实例创建已取消', 'info');
+}
+
+// 目录冲突处理
+function showDirectoryConflictModal(conflictPath, conflictData) {
+    currentConflictData = conflictData;
+    
+    const pathElement = document.getElementById('conflictDirectoryPath');
+    if (pathElement) {
+        pathElement.innerHTML = `<code>${conflictPath}</code>`;
+    }
+    
+    const modal = new bootstrap.Modal(document.getElementById('directoryConflictModal'));
+    modal.show();
+}
+
+function handleDirectoryConflict(action) {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('directoryConflictModal'));
+    if (modal) {
+        modal.hide();
+    }
+    
+    if (!currentConflictData) {
+        showNotification('处理目录冲突失败：缺少冲突数据', 'error');
+        return;
+    }
+    
+    // 根据用户选择处理冲突
+    currentConflictData.conflict_resolution = action;
+    
+    // 继续创建实例
+    continueInstanceCreation(currentConflictData);
+}
+
+async function continueInstanceCreation(requestData) {
+    try {
+        showCreationProgress();
+        updateCreationStep('step-create', 'active', '正在创建实例...');
+        updateCreationProgress(60, '正在创建实例...');
+        
+        const response = await fetch('/api/start-with-config', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData),
+            signal: creationAbortController?.signal
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            updateCreationStep('step-create', 'completed', '实例创建成功');
+            updateCreationStep('step-complete', 'active', '完成设置...');
+            updateCreationProgress(100, '实例创建完成！');
+            
+            setTimeout(() => {
+                hideCreationProgress();
+                
+                // 关闭创建模态框
+                const createModal = bootstrap.Modal.getInstance(document.getElementById('createInstanceModal'));
+                if (createModal) {
+                    createModal.hide();
+                }
+                
+                showNotification(`实例创建成功: ${result.instance_id}`, 'success');
+                loadInstancesWithNamespace();
+            }, 1000);
+            
+        } else {
+            updateCreationStep('step-create', 'error', '创建失败');
+            updateCreationProgress(100, '创建失败: ' + result.error);
+            
+            setTimeout(() => {
+                hideCreationProgress();
+                alert('创建实例失败: ' + result.error);
+            }, 2000);
+        }
+        
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            return; // 用户取消，不显示错误
+        }
+        
+        updateCreationStep('step-create', 'error', '创建异常');
+        updateCreationProgress(100, '创建异常: ' + error.message);
+        
+        setTimeout(() => {
+            hideCreationProgress();
+            alert('创建实例失败: ' + error.message);
+        }, 2000);
+    }
+}
 function fillCurrentDirectory() {
     const pathInput = document.getElementById('instancePath');
     // 使用一个合理的默认路径
