@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>路径显示测试</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>路径显示测试</h1>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5>路径类型切换测试</h5>
+            </div>
+            <div class="card-body">
+                <!-- 路径类型选择 -->
+                <div class="mb-3">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="pathType" id="localPath" value="local" checked onchange="updatePathHelpText()">
+                        <label class="form-check-label" for="localPath">
+                            <i class="fas fa-folder"></i> 本地路径
+                        </label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="pathType" id="gitPath" value="git" onchange="updatePathHelpText()">
+                        <label class="form-check-label" for="gitPath">
+                            <i class="fab fa-git-alt"></i> Git 地址
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- 路径输入 -->
+                <div class="mb-3">
+                    <label for="instancePath" class="form-label">路径</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="instancePath" placeholder="请输入本地路径或Git地址" required>
+                        <button class="btn btn-outline-secondary" type="button" id="browsePathBtn" title="浏览本地目录">
+                            <i class="fas fa-folder-open"></i> 浏览
+                        </button>
+                    </div>
+                    <div class="form-text" id="pathHelpText">
+                        <i class="fas fa-info-circle"></i> 
+                        请输入本地目录的绝对路径，或点击"浏览"选择目录
+                    </div>
+                </div>
+                
+                <button class="btn btn-primary" onclick="testPathConfig()">测试路径配置</button>
+                <button class="btn btn-info" onclick="testCliExtraInfo()">测试cliExtra信息</button>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>测试结果</h5>
+            </div>
+            <div class="card-body">
+                <pre id="testResults">点击测试按钮查看结果...</pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function updatePathHelpText() {
+            const isLocal = document.getElementById('localPath').checked;
+            const helpText = document.getElementById('pathHelpText');
+            const pathInput = document.getElementById('instancePath');
+            const browseBtn = document.getElementById('browsePathBtn');
+            
+            if (isLocal) {
+                helpText.innerHTML = '<i class="fas fa-info-circle"></i> 请输入本地目录的绝对路径，或点击"浏览"选择目录';
+                pathInput.placeholder = '例如: /Users/username/project';
+                browseBtn.style.display = 'block';
+                browseBtn.disabled = false;
+            } else {
+                // 获取默认项目目录并显示完整路径
+                fetch('/api/config/projects-dir')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.projects_dir) {
+                            // 确保显示完整的绝对路径
+                            const projectsDir = data.projects_dir;
+                            helpText.innerHTML = `<i class="fas fa-info-circle"></i> 请输入Git仓库地址，将自动克隆到: <br><code style="word-break: break-all;">${projectsDir}</code>`;
+                        } else {
+                            helpText.innerHTML = '<i class="fas fa-info-circle"></i> 请输入Git仓库地址，将自动克隆到默认项目目录';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('获取项目目录失败:', error);
+                        helpText.innerHTML = '<i class="fas fa-info-circle"></i> 请输入Git仓库地址，将自动克隆到默认项目目录';
+                    });
+                
+                pathInput.placeholder = '例如: https://github.com/user/repo.git';
+                browseBtn.style.display = 'none';
+                browseBtn.disabled = true;
+            }
+        }
+        
+        async function testPathConfig() {
+            const results = document.getElementById('testResults');
+            results.textContent = '正在测试路径配置...';
+            
+            try {
+                const response = await fetch('/api/config/projects-dir');
+                const data = await response.json();
+                
+                results.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                results.textContent = '测试失败: ' + error.message;
+            }
+        }
+        
+        async function testCliExtraInfo() {
+            const results = document.getElementById('testResults');
+            results.textContent = '正在测试cliExtra信息...';
+            
+            try {
+                const response = await fetch('/api/config/cliextra-info');
+                const data = await response.json();
+                
+                results.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                results.textContent = '测试失败: ' + error.message;
+            }
+        }
+        
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            updatePathHelpText();
+        });
+    </script>
+</body>
+</html>
