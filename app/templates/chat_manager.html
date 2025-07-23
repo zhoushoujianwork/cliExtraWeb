@@ -391,6 +391,10 @@
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
+                <!-- Namespace状态显示 -->
+                <div id="namespaceStats" class="ms-3">
+                    <small class="text-muted">加载中...</small>
+                </div>
             </div>
             <div class="vr"></div>
             <button class="btn btn-sm btn-info" onclick="window.open('/workflow', '_blank')" title="Workflow 管理">
@@ -1004,8 +1008,58 @@ function stopInstance(instanceId) {
 
 // 手动刷新
 function manualRefresh() {
-    if (typeof loadInstancesWithNamespace === 'function') {
+    console.log('执行手动刷新...');
+    
+    // 如果有namespace管理器，使用全面刷新
+    if (typeof refreshAllPageComponents === 'function') {
+        refreshAllPageComponents();
+    } else if (typeof loadInstancesWithNamespace === 'function') {
         loadInstancesWithNamespace();
+    }
+    
+    // 显示刷新提示
+    if (typeof showNotification === 'function') {
+        showNotification('页面已刷新', 'success');
+    }
+}
+
+// Namespace切换辅助函数
+function clearSelectedInstance() {
+    // 清除当前选中的实例
+    window.currentInstanceId = null;
+    
+    // 清空监控输出
+    const outputDiv = document.getElementById('instanceOutput');
+    if (outputDiv) {
+        outputDiv.innerHTML = '';
+    }
+    
+    // 重置监控按钮状态
+    const monitorButtons = document.querySelectorAll('.monitor-btn');
+    monitorButtons.forEach(btn => {
+        btn.classList.remove('btn-warning');
+        btn.classList.add('btn-outline-primary');
+        btn.innerHTML = '<i class="fas fa-eye"></i>';
+    });
+}
+
+function refreshNamespaceStats() {
+    // 刷新namespace统计信息（如果页面有显示的话）
+    const statsElement = document.getElementById('namespaceStats');
+    if (statsElement) {
+        fetch('/api/namespaces/stats')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const stats = data.stats;
+                    statsElement.innerHTML = `
+                        <small class="text-muted">
+                            总计: ${stats.total_instances} 实例 / ${stats.total_namespaces} namespace
+                        </small>
+                    `;
+                }
+            })
+            .catch(error => console.error('获取namespace统计失败:', error));
     }
 }
 
@@ -1031,6 +1085,13 @@ document.addEventListener('DOMContentLoaded', function() {
             loadInstancesWithNamespace();
         }
     }, 5000);
+    
+    // 初始化namespace统计显示
+    setTimeout(() => {
+        if (typeof refreshNamespaceStats === 'function') {
+            refreshNamespaceStats();
+        }
+    }, 1000);
 });
 
 // 初始化自适应 textarea

@@ -121,17 +121,171 @@ function switchNamespace() {
         
         console.log('切换namespace:', oldNamespace, '->', currentNamespace || '全部');
         
-        // 重新加载实例列表
-        loadInstancesWithNamespace();
+        // 显示切换提示
+        showNamespaceSwitchNotification(oldNamespace, currentNamespace);
         
-        // 重新加载聊天记录
-        reloadChatHistoryForNamespace(currentNamespace);
-        
-        // 停止当前监控
-        if (typeof stopMonitoring === 'function') {
-            stopMonitoring();
-        }
+        // 执行全面的页面刷新
+        refreshAllPageComponents();
     }
+}
+
+/**
+ * 显示namespace切换通知
+ */
+function showNamespaceSwitchNotification(oldNs, newNs) {
+    const oldName = oldNs || '全部';
+    const newName = newNs || '全部';
+    
+    if (typeof showNotification === 'function') {
+        showNotification(`已切换到 ${newName} namespace`, 'info');
+    } else {
+        console.log(`Namespace切换: ${oldName} -> ${newName}`);
+    }
+}
+
+/**
+ * 刷新所有页面组件
+ */
+function refreshAllPageComponents() {
+    console.log('开始刷新所有页面组件...');
+    
+    // 1. 停止当前的监控和活动
+    stopCurrentActivities();
+    
+    // 2. 刷新实例列表
+    refreshInstancesList();
+    
+    // 3. 刷新聊天相关组件
+    refreshChatComponents();
+    
+    // 4. 刷新其他UI组件
+    refreshOtherComponents();
+    
+    console.log('页面组件刷新完成');
+}
+
+/**
+ * 停止当前活动
+ */
+function stopCurrentActivities() {
+    // 停止实例监控
+    if (typeof stopMonitoring === 'function') {
+        stopMonitoring();
+    }
+    
+    // 停止任何正在进行的轮询
+    if (window.instanceRefreshInterval) {
+        clearInterval(window.instanceRefreshInterval);
+    }
+    
+    // 清除选中的实例
+    if (typeof clearSelectedInstance === 'function') {
+        clearSelectedInstance();
+    }
+}
+
+/**
+ * 刷新实例列表
+ */
+function refreshInstancesList() {
+    console.log('刷新实例列表...');
+    
+    // 重新加载实例列表
+    loadInstancesWithNamespace();
+    
+    // 清空实例选择器
+    const instanceSelect = document.getElementById('instanceSelect');
+    if (instanceSelect) {
+        instanceSelect.innerHTML = '<option value="">选择实例...</option>';
+    }
+    
+    // 清空聊天实例选择器
+    const chatInstanceSelect = document.getElementById('chatInstanceSelect');
+    if (chatInstanceSelect) {
+        chatInstanceSelect.innerHTML = '<option value="">选择实例...</option>';
+    }
+}
+
+/**
+ * 刷新聊天相关组件
+ */
+function refreshChatComponents() {
+    console.log('刷新聊天组件...');
+    
+    // 重新加载聊天记录
+    reloadChatHistoryForNamespace(currentNamespace);
+    
+    // 清空当前聊天显示
+    const chatMessages = document.getElementById('chatMessages');
+    if (chatMessages) {
+        chatMessages.innerHTML = '';
+    }
+    
+    // 重置聊天输入
+    const chatInput = document.getElementById('chatInput');
+    if (chatInput) {
+        chatInput.value = '';
+    }
+    
+    // 更新聊天状态显示
+    updateChatStatus();
+}
+
+/**
+ * 刷新其他UI组件
+ */
+function refreshOtherComponents() {
+    console.log('刷新其他组件...');
+    
+    // 更新页面标题或状态栏
+    updatePageTitle();
+    
+    // 刷新任何namespace相关的统计信息
+    if (typeof refreshNamespaceStats === 'function') {
+        refreshNamespaceStats();
+    }
+    
+    // 重新启动定期刷新
+    restartPeriodicRefresh();
+}
+
+/**
+ * 更新聊天状态
+ */
+function updateChatStatus() {
+    const statusElement = document.getElementById('chatStatus');
+    if (statusElement) {
+        const nsName = currentNamespace || '全部';
+        statusElement.textContent = `当前namespace: ${nsName}`;
+    }
+}
+
+/**
+ * 更新页面标题
+ */
+function updatePageTitle() {
+    const nsName = currentNamespace || '全部';
+    const titleElement = document.querySelector('title');
+    if (titleElement) {
+        const baseTitle = 'Q Chat Manager';
+        titleElement.textContent = `${baseTitle} - ${nsName}`;
+    }
+}
+
+/**
+ * 重新启动定期刷新
+ */
+function restartPeriodicRefresh() {
+    // 重新启动实例列表的定期刷新
+    if (window.instanceRefreshInterval) {
+        clearInterval(window.instanceRefreshInterval);
+    }
+    
+    window.instanceRefreshInterval = setInterval(() => {
+        if (typeof loadInstancesWithNamespace === 'function') {
+            loadInstancesWithNamespace();
+        }
+    }, 5000);
 }
 
 /**
