@@ -669,6 +669,9 @@
                             <button class="btn btn-outline-secondary" type="button" id="browsePathBtn" onclick="browsePath()" title="浏览本地目录">
                                 <i class="fas fa-folder-open"></i> 浏览
                             </button>
+                            <button class="btn btn-outline-warning" type="button" id="skipBrowseBtn" onclick="skipBrowseAndManualInput()" title="跳过浏览，手动输入" style="display: none;">
+                                <i class="fas fa-keyboard"></i> 手动输入
+                            </button>
                         </div>
                         <div class="form-text" id="pathHelpText">
                             <i class="fas fa-info-circle"></i> 
@@ -1534,6 +1537,33 @@ async function validatePath(path, isLocal) {
     }
 }
 
+// 跳过浏览，直接手动输入
+function skipBrowseAndManualInput() {
+    // 隐藏跳过按钮
+    const skipBtn = document.getElementById('skipBrowseBtn');
+    if (skipBtn) {
+        skipBtn.style.display = 'none';
+    }
+    
+    // 恢复浏览按钮状态
+    const browseBtn = document.getElementById('browsePathBtn');
+    if (browseBtn) {
+        browseBtn.innerHTML = '<i class="fas fa-folder-open"></i> 浏览';
+        browseBtn.disabled = false;
+    }
+    
+    // 聚焦到输入框
+    const pathInput = document.getElementById('instancePath');
+    if (pathInput) {
+        pathInput.focus();
+        pathInput.placeholder = '请手动输入完整的本地路径，例如：/Users/username/project';
+    }
+    
+    // 显示手动输入提示
+    showNotification('已跳过目录选择，请手动输入完整路径', 'info');
+    showDirectoryInputHelper();
+}
+
 // 浏览本地路径
 async function browsePath() {
     try {
@@ -1544,6 +1574,12 @@ async function browsePath() {
         const originalBtnContent = browseBtn.innerHTML;
         browseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 选择中...';
         browseBtn.disabled = true;
+        
+        // 显示跳过按钮
+        const skipBtn = document.getElementById('skipBrowseBtn');
+        if (skipBtn) {
+            skipBtn.style.display = 'inline-block';
+        }
         
         // 显示提示信息
         showNotification('正在打开目录选择对话框，请在系统对话框中选择目录...', 'info');
@@ -1609,6 +1645,12 @@ async function browsePath() {
         if (browseBtn) {
             browseBtn.innerHTML = originalBtnContent;
             browseBtn.disabled = false;
+        }
+        
+        // 隐藏跳过按钮
+        const skipBtn = document.getElementById('skipBrowseBtn');
+        if (skipBtn) {
+            skipBtn.style.display = 'none';
         }
     }
 }
