@@ -382,13 +382,18 @@ class InstanceManager:
             logger.error(f'重启cliExtra实例 {instance_id} 失败: {str(e)}')
             return {'success': False, 'error': str(e)}
     
-    def broadcast_message(self, message: str) -> Dict[str, any]:
-        """广播消息到所有运行中的实例"""
+    def broadcast_message(self, message: str, namespace: str = None) -> Dict[str, any]:
+        """广播消息到指定namespace的所有运行中的实例"""
         try:
             self._check_cliExtra()
             
+            # 构建命令，如果指定了namespace则添加--namespace参数
+            cmd = ['cliExtra', 'broadcast', message]
+            if namespace:
+                cmd.extend(['--namespace', namespace])
+            
             result = subprocess.run(
-                ['cliExtra', 'broadcast', message],
+                cmd,
                 capture_output=True, text=True, timeout=30
             )
             
@@ -397,16 +402,31 @@ class InstanceManager:
                 output = result.stdout.strip()
                 sent_count = 0
                 
-                # 尝试从输出中提取发送数量
+                # 尝试从输出中提取发送数量，寻找"发送给 X 个实例"或"广播给 X 个实例"的模式
                 import re
-                count_match = re.search(r'(\d+)', output)
-                if count_match:
-                    sent_count = int(count_match.group(1))
-                else:
-                    # 如果无法解析，获取当前运行实例数量作为估计
+                count_patterns = [
+                    r'发送给\s*(\d+)\s*个实例',
+                    r'广播给\s*(\d+)\s*个实例',
+                    r'已发送给\s*(\d+)\s*个实例',
+                    r'成功发送给\s*(\d+)\s*个实例'
+                ]
+                
+                for pattern in count_patterns:
+                    count_match = re.search(pattern, output)
+                    if count_match:
+                        sent_count = int(count_match.group(1))
+                        break
+                
+                if sent_count == 0:
+                    # 如果无法解析，获取指定namespace的运行实例数量作为估计
                     with self._lock:
-                        sent_count = len([inst for inst in self.instances.values() 
-                                        if inst.status not in ['Not Running', 'Stopped', 'Terminated']])
+                        if namespace:
+                            sent_count = len([inst for inst in self.instances.values() 
+                                            if inst.status not in ['Not Running', 'Stopped', 'Terminated']
+                                            and getattr(inst, 'namespace', 'default') == namespace])
+                        else:
+                            sent_count = len([inst for inst in self.instances.values() 
+                                            if inst.status not in ['Not Running', 'Stopped', 'Terminated']])
                 
                 logger.info(f'广播消息成功，发送给 {sent_count} 个实例')
                 return {'success': True, 'sent_count': sent_count}

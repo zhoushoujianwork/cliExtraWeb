@@ -913,22 +913,27 @@ def update_role_content(role_name):
 
 @bp.route('/broadcast', methods=['POST'])
 def broadcast_message():
-    """广播消息到所有实例"""
+    """广播消息到指定namespace的所有实例"""
     try:
         data = request.get_json()
         message = data.get('message', '').strip()
+        namespace = data.get('namespace', '').strip()
         
         if not message:
             return jsonify({'success': False, 'error': '消息不能为空'}), 400
         
-        result = instance_manager.broadcast_message(message)
+        # 如果没有指定namespace，使用default
+        if not namespace:
+            namespace = 'default'
+        
+        result = instance_manager.broadcast_message(message, namespace)
         
         if result['success']:
-            chat_manager.add_system_log(f'广播消息: {message}')
+            chat_manager.add_system_log(f'广播消息到namespace "{namespace}": {message}')
             return jsonify({
                 'success': True,
                 'sent_count': result.get('sent_count', 0),
-                'message': f'消息已广播给 {result.get("sent_count", 0)} 个实例'
+                'message': f'消息已广播给namespace "{namespace}" 中的 {result.get("sent_count", 0)} 个实例'
             })
         else:
             logger.error(f'广播消息失败: {result.get("error", "未知错误")}')
