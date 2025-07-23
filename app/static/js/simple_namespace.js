@@ -51,18 +51,27 @@ function loadNamespaces() {
         .then(data => {
             allInstances = data.instances || [];
             
-            // 提取所有唯一的namespace
-            const namespaceSet = new Set();
-            namespaceSet.add(''); // 添加"全部"选项
+            // 统计每个namespace的实例数量
+            const namespaceStats = new Map();
             
             allInstances.forEach(instance => {
-                if (instance.namespace) {
-                    namespaceSet.add(instance.namespace);
+                const ns = instance.namespace || ''; // 空namespace也要统计
+                if (namespaceStats.has(ns)) {
+                    namespaceStats.set(ns, namespaceStats.get(ns) + 1);
+                } else {
+                    namespaceStats.set(ns, 1);
                 }
             });
             
-            const namespaces = Array.from(namespaceSet).sort();
-            updateNamespaceSelect(namespaces);
+            // 转换为数组并排序
+            const namespaces = Array.from(namespaceStats.keys()).sort((a, b) => {
+                // 空namespace（全部）排在最前面
+                if (a === '' && b !== '') return -1;
+                if (a !== '' && b === '') return 1;
+                return a.localeCompare(b);
+            });
+            
+            updateNamespaceSelect(namespaces, namespaceStats);
             
             return namespaces;
         })
@@ -75,7 +84,7 @@ function loadNamespaces() {
 /**
  * 更新namespace选择器
  */
-function updateNamespaceSelect(namespaces) {
+function updateNamespaceSelect(namespaces, namespaceStats) {
     const select = document.getElementById('currentNamespaceSelect');
     if (!select) return;
     
@@ -84,12 +93,36 @@ function updateNamespaceSelect(namespaces) {
     namespaces.forEach(ns => {
         const option = document.createElement('option');
         option.value = ns;
-        option.textContent = ns || '全部';
+        
+        const instanceCount = namespaceStats.get(ns) || 0;
+        
+        if (ns === '') {
+            // 空namespace显示为"全部"
+            option.textContent = `全部 (${allInstances.length})`;
+        } else {
+            // 其他namespace显示名称和实例数
+            option.textContent = `${ns} (${instanceCount})`;
+        }
+        
         if (ns === currentNamespace) {
             option.selected = true;
         }
         select.appendChild(option);
     });
+    
+    // 如果当前选择的namespace不存在，重置为空（全部）
+    if (currentNamespace && !namespaces.includes(currentNamespace)) {
+        console.log(`当前namespace "${currentNamespace}" 不存在，重置为全部`);
+        currentNamespace = '';
+        window.currentNamespace = '';
+        storeNamespace('');
+        
+        // 更新选择器
+        const allOption = select.querySelector('option[value=""]');
+        if (allOption) {
+            allOption.selected = true;
+        }
+    }
 }
 
 /**
@@ -198,10 +231,12 @@ function loadInstancesWithNamespace() {
             // 根据当前namespace过滤实例
             let filteredInstances = allInstances;
             if (currentNamespace) {
+                // 选择了特定namespace，只显示该namespace的实例
                 filteredInstances = allInstances.filter(instance => 
                     instance.namespace === currentNamespace
                 );
             }
+            // 如果currentNamespace为空，显示所有实例（包括没有namespace的）
             
             updateInstancesList(filteredInstances);
         })
@@ -266,7 +301,12 @@ function updateInstancesList(instances) {
     if (window.terminalMemory) {
         window.terminalMemory.autoRestoreTerminalSelection(instances, (instanceId) => {
             console.log('🔄 自动恢复终端监控:', instanceId);
-            startMonitoring(instanceId);
+            // 只有在监控函数存在时才调用
+            if (typeof startMonitoring === 'function') {
+                startMonitoring(instanceId);
+            } else {
+                console.log('⚠️ startMonitoring 函数不可用，跳过自动恢复');
+            }
         });
     }
 }
@@ -281,9 +321,15 @@ function startMonitoringWithMemory(instanceId) {
         window.terminalMemory.saveLastSelectedInstance(instanceId, currentNamespace || 'default');
     }
     
-    // 开始监控
+    // 开始监控（只有在监控函数存在时才调用）
     if (typeof startMonitoring === 'function') {
         startMonitoring(instanceId);
+    } else {
+        console.log('⚠️ startMonitoring 函数不可用，仅保存选择记录');
+        // 如果没有监控函数，可以考虑跳转到聊天管理页面
+        if (confirm('监控功能需要在聊天管理页面使用，是否跳转？')) {
+            window.location.href = '/';
+        }
     }
 }
 
