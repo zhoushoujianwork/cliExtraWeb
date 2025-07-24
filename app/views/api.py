@@ -18,17 +18,20 @@ logger = logging.getLogger(__name__)
 
 @bp.route('/instances', methods=['GET'])
 def get_instances():
-    """获取实例列表，支持namespace过滤"""
+    """获取实例列表，支持namespace过滤和显示所有namespace选项"""
     try:
-        # 获取namespace参数
+        # 获取参数
         namespace = request.args.get('namespace', '').strip()
+        show_all = request.args.get('show_all', 'true').lower() == 'true'  # 默认显示所有
+        
+        logger.info(f"📋 获取实例列表 - namespace: {namespace or 'None'}, show_all: {show_all}")
         
         if namespace:
             # 获取指定namespace的实例
             instances = instance_manager.get_instances_by_namespace(namespace)
         else:
-            # 获取所有实例（保持向后兼容）
-            instance_manager.sync_screen_instances()
+            # 根据show_all参数决定是否显示所有namespace
+            instance_manager.sync_screen_instances(show_all_namespaces=show_all)
             instances = instance_manager.get_instances()
         
         # 获取聊天历史
@@ -38,11 +41,45 @@ def get_instances():
         return jsonify({
             'success': True, 
             'instances': instances,
-            'chat_history': chat_history
+            'chat_history': chat_history,
+            'show_all_namespaces': show_all,  # 返回当前设置
+            'namespace_filter': namespace or None
         })
     except Exception as e:
         logger.error("获取实例列表失败: {}".format(str(e)))
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@bp.route('/instances/status', methods=['GET'])
+def get_instances_status():
+    """获取所有实例状态信息"""
+    try:
+        instances_status = instance_manager.get_instances_status()
+        return jsonify({
+            'success': True,
+            'instances_status': instances_status
+        })
+    except Exception as e:
+        logger.error("获取实例状态失败: {}".format(str(e)))
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@bp.route('/instances/<instance_name>/status', methods=['GET'])
+def get_instance_status(instance_name):
+    """获取单个实例详细状态"""
+    try:
+        status = instance_manager.get_instance_detailed_status(instance_name)
+        return jsonify({
+            'success': True,
+            'status': status
+        })
+    except Exception as e:
+        logger.error(f"获取实例 {instance_name} 状态失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @bp.route('/start-with-config', methods=['POST'])
 def start_instance_with_config():
@@ -259,41 +296,7 @@ def restart_instance(instance_id):
         logger.error(f'重启实例 {instance_id} 失败: {str(e)}')
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@bp.route('/instances/<instance_id>/details', methods=['GET'])
-def get_instance_details(instance_id):
-    """获取实例详细信息"""
-    try:
-        # 使用cliExtra命令获取详细信息
-        result = subprocess.run(
-            ['cliExtra', 'list', instance_id, '--json'],
-            capture_output=True, text=True, timeout=10
-        )
-        
-        if result.returncode == 0:
-            import json
-            instance_data = json.loads(result.stdout.strip())
-            
-            return jsonify({
-                'success': True,
-                'instance': instance_data
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': f'实例 {instance_id} 不存在或获取信息失败'
-            }), 404
-            
-    except subprocess.TimeoutExpired:
-        return jsonify({
-            'success': False,
-            'error': '获取实例详情超时'
-        }), 500
-    except Exception as e:
-        logger.error(f'获取实例 {instance_id} 详情失败: {str(e)}')
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+
 
 @bp.route('/send', methods=['POST'])
 def send_message():
@@ -918,22 +921,34 @@ def broadcast_message():
         data = request.get_json()
         message = data.get('message', '').strip()
         namespace = data.get('namespace', '').strip()
+        broadcast_all = data.get('broadcast_all', True)  # 默认广播给所有namespace
         
         if not message:
             return jsonify({'success': False, 'error': '消息不能为空'}), 400
         
-        # 如果没有指定namespace，使用default
-        if not namespace:
-            namespace = 'default'
+        logger.info(f"📢 广播消息 - namespace: {namespace or 'None'}, broadcast_all: {broadcast_all}")
         
-        result = instance_manager.broadcast_message(message, namespace)
+        # 调用修改后的广播方法
+        result = instance_manager.broadcast_message(message, namespace, broadcast_all)
         
         if result['success']:
-            chat_manager.add_system_log(f'广播消息到namespace "{namespace}": {message}')
+            # 根据参数生成不同的日志消息
+            if namespace:
+                log_msg = f'广播消息到namespace "{namespace}": {message}'
+                response_msg = f'消息已广播给namespace "{namespace}" 中的 {result.get("sent_count", 0)} 个实例'
+            elif broadcast_all:
+                log_msg = f'广播消息到所有namespace: {message}'
+                response_msg = f'消息已广播给所有namespace中的 {result.get("sent_count", 0)} 个实例'
+            else:
+                log_msg = f'广播消息到default namespace: {message}'
+                response_msg = f'消息已广播给default namespace中的 {result.get("sent_count", 0)} 个实例'
+            
+            chat_manager.add_system_log(log_msg)
             return jsonify({
                 'success': True,
                 'sent_count': result.get('sent_count', 0),
-                'message': f'消息已广播给namespace "{namespace}" 中的 {result.get("sent_count", 0)} 个实例'
+                'message': response_msg,
+                'broadcast_scope': 'specific' if namespace else ('all' if broadcast_all else 'default')
             })
         else:
             logger.error(f'广播消息失败: {result.get("error", "未知错误")}')

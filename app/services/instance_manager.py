@@ -84,16 +84,28 @@ class InstanceManager:
         conversations_dir = self.get_namespace_conversations_dir(namespace)
         return os.path.join(conversations_dir, f'{instance_id}.json')
     
-    def sync_screen_instances(self, namespace_filter: Optional[str] = None):
-        """同步tmux实例状态 - 使用cliExtra list --json命令"""
+    def sync_screen_instances(self, namespace_filter: Optional[str] = None, show_all_namespaces: bool = True):
+        """同步tmux实例状态 - 使用cliExtra list --json命令
+        
+        Args:
+            namespace_filter: 指定namespace过滤器
+            show_all_namespaces: 是否显示所有namespace的实例（默认True保持兼容性）
+        """
         try:
             self._check_cliExtra()
             
-            # 构建cliExtra list命令
-            cmd = ['cliExtra', 'list', '--json']
-            if namespace_filter:
-                cmd.extend(['-n', namespace_filter])
+            # 构建qq list命令（使用qq别名）
+            cmd = ['qq', 'list', '--json']
             
+            if namespace_filter:
+                # 如果指定了namespace，使用-n参数
+                cmd.extend(['-n', namespace_filter])
+            elif show_all_namespaces:
+                # 如果要显示所有namespace，添加--all参数（适配新默认行为）
+                cmd.append('--all')
+            # 如果show_all_namespaces=False且没有namespace_filter，则使用默认行为（只显示default）
+            
+            logger.info(f"🔍 执行命令: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             
             if result.returncode != 0:
@@ -204,6 +216,229 @@ class InstanceManager:
         """获取指定实例"""
         return self.instances.get(instance_id)
     
+    def get_instances_status(self) -> Dict[str, Dict]:
+        """获取所有实例的状态信息"""
+        try:
+            # 先同步实例状态
+            self.sync_screen_instances()
+            
+            status_info = {}
+            with self._lock:
+                for instance_id, instance in self.instances.items():
+                    status_info[instance_id] = self._get_instance_status(instance)
+            
+            return status_info
+        except Exception as e:
+            logger.error(f"获取实例状态失败: {e}")
+            return {}
+    
+    def get_instance_detailed_status(self, instance_name: str) -> Dict:
+        """获取单个实例的详细状态信息"""
+        try:
+            # 先同步实例状态
+            self.sync_screen_instances()
+            
+            instance = self.instances.get(instance_name)
+            if not instance:
+                return {'error': f'实例 {instance_name} 不存在'}
+            
+            return self._get_detailed_instance_status(instance)
+        except Exception as e:
+            logger.error(f"获取实例 {instance_name} 详细状态失败: {e}")
+            return {'error': str(e)}
+    
+    def _get_instance_status(self, instance: QInstance) -> Dict:
+        """获取实例基本状态信息"""
+        try:
+            # 检查tmux会话是否存在
+            session_exists = self._check_tmux_session_exists(instance.session_name)
+            
+            if not session_exists:
+                return {
+                    'status': 'stopped',
+                    'color': 'gray',
+                    'description': '已停止',
+                    'last_activity': instance.created_at
+                }
+            
+            # 检查进程状态
+            pid = self._get_session_pid(instance.session_name)
+            if not pid:
+                return {
+                    'status': 'error',
+                    'color': 'red',
+                    'description': '进程异常',
+                    'last_activity': instance.created_at
+                }
+            
+            # 分析最近的输出来判断状态
+            recent_output = self._get_recent_session_output(instance.session_name)
+            status = self._analyze_instance_status(recent_output)
+            
+            return {
+                'status': status['status'],
+                'color': status['color'],
+                'description': status['description'],
+                'last_activity': self._get_last_activity_time(instance.session_name),
+                'pid': pid
+            }
+        except Exception as e:
+            logger.error(f"获取实例 {instance.name} 状态失败: {e}")
+            return {
+                'status': 'error',
+                'color': 'red',
+                'description': f'状态检查失败: {str(e)}',
+                'last_activity': instance.created_at
+            }
+    
+    def _get_detailed_instance_status(self, instance: QInstance) -> Dict:
+        """获取实例详细状态信息"""
+        basic_status = self._get_instance_status(instance)
+        
+        try:
+            # 获取更多详细信息
+            session_info = self._get_session_info(instance.session_name)
+            recent_output = self._get_recent_session_output(instance.session_name, lines=20)
+            
+            return {
+                **basic_status,
+                'instance_name': instance.name,
+                'session_name': instance.session_name,
+                'namespace': instance.namespace,
+                'role': instance.role,
+                'created_at': instance.created_at,
+                'session_info': session_info,
+                'recent_output': recent_output,
+                'uptime': self._calculate_uptime(instance.created_at)
+            }
+        except Exception as e:
+            logger.error(f"获取实例 {instance.name} 详细状态失败: {e}")
+            return {
+                **basic_status,
+                'error': str(e)
+            }
+    
+    def _analyze_instance_status(self, recent_output: str) -> Dict:
+        """分析实例输出判断状态"""
+        if not recent_output:
+            return {
+                'status': 'idle',
+                'color': 'green',
+                'description': '空闲中'
+            }
+        
+        # 检查是否在等待用户输入
+        if any(indicator in recent_output.lower() for indicator in [
+            'waiting for', '等待', 'please enter', '请输入', 
+            'press any key', '按任意键', '>', '$', '#'
+        ]):
+            return {
+                'status': 'waiting',
+                'color': 'blue',
+                'description': '等待输入'
+            }
+        
+        # 检查是否有错误信息
+        if any(error in recent_output.lower() for error in [
+            'error', 'failed', 'exception', '错误', '失败', '异常'
+        ]):
+            return {
+                'status': 'error',
+                'color': 'red',
+                'description': '执行错误'
+            }
+        
+        # 检查是否在处理中
+        if any(busy in recent_output.lower() for busy in [
+            'processing', 'loading', 'running', '处理中', '加载中', '运行中',
+            'analyzing', '分析中', 'generating', '生成中'
+        ]):
+            return {
+                'status': 'busy',
+                'color': 'yellow',
+                'description': '处理中'
+            }
+        
+        # 默认为空闲状态
+        return {
+            'status': 'idle',
+            'color': 'green',
+            'description': '空闲中'
+        }
+    
+    def _get_recent_session_output(self, session_name: str, lines: int = 5) -> str:
+        """获取会话最近的输出"""
+        try:
+            cmd = f"tmux capture-pane -t {session_name} -p -S -{lines}"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+            return result.stdout.strip() if result.returncode == 0 else ""
+        except Exception as e:
+            logger.debug(f"获取会话 {session_name} 输出失败: {e}")
+            return ""
+    
+    def _get_session_pid(self, session_name: str) -> Optional[int]:
+        """获取tmux会话的PID"""
+        try:
+            cmd = f"tmux list-sessions -F '#{session_name}:#{session_id}' | grep '^{session_name}:' | cut -d: -f2"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and result.stdout.strip():
+                session_id = result.stdout.strip()
+                # 获取会话中的进程PID
+                cmd = f"tmux list-panes -t {session_name} -F '#{pane_pid}'"
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+                if result.returncode == 0 and result.stdout.strip():
+                    return int(result.stdout.strip().split('\n')[0])
+        except Exception as e:
+            logger.debug(f"获取会话 {session_name} PID失败: {e}")
+        return None
+    
+    def _get_session_info(self, session_name: str) -> Dict:
+        """获取tmux会话信息"""
+        try:
+            cmd = f"tmux display-message -t {session_name} -p '#{session_name}|#{session_created}|#{session_activity}'"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                parts = result.stdout.strip().split('|')
+                return {
+                    'session_name': parts[0] if len(parts) > 0 else session_name,
+                    'created': parts[1] if len(parts) > 1 else '',
+                    'last_activity': parts[2] if len(parts) > 2 else ''
+                }
+        except Exception as e:
+            logger.debug(f"获取会话 {session_name} 信息失败: {e}")
+        return {}
+    
+    def _get_last_activity_time(self, session_name: str) -> str:
+        """获取会话最后活动时间"""
+        try:
+            cmd = f"tmux display-message -t {session_name} -p '#{session_activity}'"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception as e:
+            logger.debug(f"获取会话 {session_name} 活动时间失败: {e}")
+        return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    def _calculate_uptime(self, created_at: str) -> str:
+        """计算运行时间"""
+        try:
+            created_time = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+            uptime = datetime.now() - created_time.replace(tzinfo=None)
+            
+            days = uptime.days
+            hours, remainder = divmod(uptime.seconds, 3600)
+            minutes, _ = divmod(remainder, 60)
+            
+            if days > 0:
+                return f"{days}天 {hours}小时 {minutes}分钟"
+            elif hours > 0:
+                return f"{hours}小时 {minutes}分钟"
+            else:
+                return f"{minutes}分钟"
+        except Exception as e:
+            logger.debug(f"计算运行时间失败: {e}")
+            return "未知"
+    
     def get_instances_by_namespace(self, namespace: str) -> Dict[str, any]:
         """获取指定namespace的实例列表"""
         try:
@@ -270,25 +505,43 @@ class InstanceManager:
         try:
             self._check_cliExtra()
             
+            # 构建完整命令（qq send不需要-system参数）
+            cmd = ['qq', 'send', instance_id, message]
+            cmd_str = ' '.join([f'"{arg}"' if ' ' in arg else arg for arg in cmd])
+            
+            # 详细日志输出
+            logger.info(f'🚀 准备发送消息到实例: {instance_id}')
+            logger.info(f'📝 消息内容: {message}')
+            logger.info(f'🔧 执行命令: {cmd_str}')
+            logger.info(f'📋 命令数组: {cmd}')
+            
             result = subprocess.run(
-                ['cliExtra', 'send', instance_id, message],
+                cmd,
                 capture_output=True, text=True, timeout=10
             )
             
+            # 详细结果日志
+            logger.info(f'📊 命令返回码: {result.returncode}')
+            logger.info(f'📤 标准输出: {result.stdout}')
+            logger.info(f'📤 错误输出: {result.stderr}')
+            
             if result.returncode == 0:
-                logger.info(f'向cliExtra实例 {instance_id} 发送消息: {message[:50]}...')
-                return {'success': True}
+                logger.info(f'✅ 消息发送成功到实例 {instance_id}')
+                return {'success': True, 'stdout': result.stdout, 'stderr': result.stderr}
             else:
                 error_msg = result.stderr or result.stdout
-                logger.error(f'向cliExtra实例 {instance_id} 发送消息失败: {error_msg}')
-                return {'success': False, 'error': error_msg}
+                logger.error(f'❌ 消息发送失败到实例 {instance_id}: {error_msg}')
+                return {'success': False, 'error': error_msg, 'stdout': result.stdout, 'stderr': result.stderr}
                 
         except subprocess.TimeoutExpired:
             error_msg = '发送消息超时'
-            logger.error(f'向cliExtra实例 {instance_id} 发送消息超时')
+            logger.error(f'⏰ 向cliExtra实例 {instance_id} 发送消息超时（10秒）')
+            logger.error(f'🔧 超时命令: qq send {instance_id} -system "{message}"')
             return {'success': False, 'error': error_msg}
         except Exception as e:
-            logger.error(f'向cliExtra实例 {instance_id} 发送消息失败: {str(e)}')
+            logger.error(f'💥 向cliExtra实例 {instance_id} 发送消息异常: {str(e)}')
+            logger.error(f'🔧 失败命令: qq send {instance_id} -system "{message}"')
+            logger.error(f'📋 异常类型: {type(e).__name__}')
             return {'success': False, 'error': str(e)}
     
     def stop_instance(self, instance_id: str) -> Dict[str, any]:
@@ -382,16 +635,29 @@ class InstanceManager:
             logger.error(f'重启cliExtra实例 {instance_id} 失败: {str(e)}')
             return {'success': False, 'error': str(e)}
     
-    def broadcast_message(self, message: str, namespace: str = None) -> Dict[str, any]:
-        """广播消息到指定namespace的所有运行中的实例"""
+    def broadcast_message(self, message: str, namespace: str = None, broadcast_all: bool = True) -> Dict[str, any]:
+        """广播消息到指定namespace的所有运行中的实例
+        
+        Args:
+            message: 要广播的消息
+            namespace: 指定namespace（如果提供，则只广播给该namespace）
+            broadcast_all: 是否广播给所有namespace（默认True保持兼容性）
+        """
         try:
             self._check_cliExtra()
             
-            # 构建命令，如果指定了namespace则添加--namespace参数
-            cmd = ['cliExtra', 'broadcast', message]
-            if namespace:
-                cmd.extend(['--namespace', namespace])
+            # 构建qq broadcast命令（使用qq别名）
+            cmd = ['qq', 'broadcast', message]
             
+            if namespace:
+                # 如果指定了namespace，使用--namespace参数
+                cmd.extend(['--namespace', namespace])
+            elif broadcast_all:
+                # 如果要广播给所有namespace，添加--all参数（适配新默认行为）
+                cmd.append('--all')
+            # 如果broadcast_all=False且没有namespace，则使用默认行为（只广播给default）
+            
+            logger.info(f"🔍 执行广播命令: {' '.join(cmd)}")
             result = subprocess.run(
                 cmd,
                 capture_output=True, text=True, timeout=30
@@ -522,6 +788,224 @@ class InstanceManager:
         except Exception as e:
             logger.error(f'读取tmux日志文件失败 {log_path}: {str(e)}')
             return []
+    
+    def get_terminal_output_with_pagination(self, instance_id: str, page: int = 1, 
+                                           page_size: int = 100, direction: str = 'forward', 
+                                           from_line: int = 0) -> Dict[str, any]:
+        """获取终端输出，支持分页和滚动加载"""
+        try:
+            # 获取实例的namespace信息
+            instance_namespace = 'default'
+            with self._lock:
+                if instance_id in self.instances:
+                    instance_namespace = self.instances[instance_id].namespace or 'default'
+            
+            # 获取tmux日志文件路径
+            tmux_log_path = self.get_instance_tmux_log_path(instance_id, instance_namespace)
+            
+            if not os.path.exists(tmux_log_path):
+                return {
+                    'success': False,
+                    'error': f'日志文件不存在: {tmux_log_path}',
+                    'lines': [],
+                    'total_lines': 0,
+                    'has_more': False
+                }
+            
+            # 读取文件并分页
+            return self._read_file_with_pagination(
+                tmux_log_path, page, page_size, direction, from_line
+            )
+            
+        except Exception as e:
+            logger.error(f'获取终端输出分页失败 {instance_id}: {str(e)}')
+            return {
+                'success': False,
+                'error': str(e),
+                'lines': [],
+                'total_lines': 0,
+                'has_more': False
+            }
+    
+    def _read_file_with_pagination(self, file_path: str, page: int, page_size: int, 
+                                 direction: str, from_line: int) -> Dict[str, any]:
+        """从文件读取内容并分页"""
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                # 读取所有行
+                all_lines = f.readlines()
+                total_lines = len(all_lines)
+                
+                if total_lines == 0:
+                    return {
+                        'success': True,
+                        'lines': [],
+                        'total_lines': 0,
+                        'current_page': page,
+                        'page_size': page_size,
+                        'has_more': False,
+                        'has_previous': False
+                    }
+                
+                # 计算分页范围
+                if direction == 'backward':
+                    # 向上滚动，从指定行向前获取
+                    end_line = from_line if from_line > 0 else total_lines
+                    start_line = max(0, end_line - page_size)
+                else:
+                    # 向下滚动，从指定行向后获取
+                    start_line = from_line
+                    end_line = min(total_lines, start_line + page_size)
+                
+                # 提取指定范围的行
+                selected_lines = all_lines[start_line:end_line]
+                
+                # 处理行内容
+                lines = []
+                for i, line in enumerate(selected_lines):
+                    lines.append({
+                        'line_number': start_line + i + 1,
+                        'content': line.rstrip('\n\r'),
+                        'timestamp': time.time(),
+                        'type': 'output'
+                    })
+                
+                return {
+                    'success': True,
+                    'lines': lines,
+                    'total_lines': total_lines,
+                    'current_page': page,
+                    'page_size': page_size,
+                    'start_line': start_line + 1,
+                    'end_line': end_line,
+                    'has_more': end_line < total_lines,
+                    'has_previous': start_line > 0,
+                    'direction': direction
+                }
+                
+        except Exception as e:
+            logger.error(f'读取文件分页失败 {file_path}: {str(e)}')
+            return {
+                'success': False,
+                'error': str(e),
+                'lines': [],
+                'total_lines': 0,
+                'has_more': False
+            }
+    
+    def get_terminal_history_info(self, instance_id: str) -> Dict[str, any]:
+        """获取终端历史记录统计信息"""
+        try:
+            # 获取实例的namespace信息
+            instance_namespace = 'default'
+            with self._lock:
+                if instance_id in self.instances:
+                    instance_namespace = self.instances[instance_id].namespace or 'default'
+            
+            # 获取tmux日志文件路径
+            tmux_log_path = self.get_instance_tmux_log_path(instance_id, instance_namespace)
+            
+            if not os.path.exists(tmux_log_path):
+                return {
+                    'success': False,
+                    'error': '日志文件不存在',
+                    'total_lines': 0,
+                    'file_size': 0
+                }
+            
+            # 获取文件统计信息
+            stat = os.stat(tmux_log_path)
+            
+            # 计算总行数
+            with open(tmux_log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                total_lines = sum(1 for _ in f)
+            
+            return {
+                'success': True,
+                'total_lines': total_lines,
+                'file_size': stat.st_size,
+                'last_modified': stat.st_mtime,
+                'file_path': tmux_log_path,
+                'recommended_page_size': min(100, max(50, total_lines // 20))
+            }
+            
+        except Exception as e:
+            logger.error(f'获取终端历史信息失败 {instance_id}: {str(e)}')
+            return {
+                'success': False,
+                'error': str(e),
+                'total_lines': 0,
+                'file_size': 0
+            }
+    
+    def search_terminal_output(self, instance_id: str, query: str, max_results: int = 50) -> Dict[str, any]:
+        """搜索终端输出内容"""
+        try:
+            # 获取实例的namespace信息
+            instance_namespace = 'default'
+            with self._lock:
+                if instance_id in self.instances:
+                    instance_namespace = self.instances[instance_id].namespace or 'default'
+            
+            # 获取tmux日志文件路径
+            tmux_log_path = self.get_instance_tmux_log_path(instance_id, instance_namespace)
+            
+            if not os.path.exists(tmux_log_path):
+                return {
+                    'success': False,
+                    'error': '日志文件不存在',
+                    'results': []
+                }
+            
+            # 搜索文件内容
+            results = []
+            with open(tmux_log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                for line_num, line in enumerate(f, 1):
+                    if query.lower() in line.lower():
+                        results.append({
+                            'line_number': line_num,
+                            'content': line.rstrip('\n\r'),
+                            'match_positions': self._find_match_positions(line, query)
+                        })
+                        
+                        if len(results) >= max_results:
+                            break
+            
+            return {
+                'success': True,
+                'query': query,
+                'results': results,
+                'total_matches': len(results),
+                'max_results': max_results,
+                'has_more': len(results) >= max_results
+            }
+            
+        except Exception as e:
+            logger.error(f'搜索终端输出失败 {instance_id}: {str(e)}')
+            return {
+                'success': False,
+                'error': str(e),
+                'results': []
+            }
+    
+    def _find_match_positions(self, text: str, query: str) -> List[Dict[str, int]]:
+        """查找匹配位置"""
+        positions = []
+        text_lower = text.lower()
+        query_lower = query.lower()
+        start = 0
+        
+        while True:
+            pos = text_lower.find(query_lower, start)
+            if pos == -1:
+                break
+            positions.append({
+                'start': pos,
+                'end': pos + len(query)
+            })
+            start = pos + 1
+        
+        return positions
     
     def get_conversation_history(self, instance_id: str, namespace: str = None) -> List[Dict[str, any]]:
         """获取实例的对话历史记录"""
