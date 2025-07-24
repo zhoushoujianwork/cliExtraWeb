@@ -533,42 +533,68 @@ class InstanceManager:
         try:
             self._check_cliExtra()
             
+            # 安全处理输入参数，确保UTF-8编码
+            try:
+                instance_id_safe = instance_id.encode('utf-8', errors='replace').decode('utf-8')
+                message_safe = message.encode('utf-8', errors='replace').decode('utf-8')
+            except Exception as e:
+                logger.error(f"参数编码处理失败: {e}")
+                return {'success': False, 'error': '参数包含无效字符'}
+            
             # 构建完整命令（qq send不需要-system参数）
-            cmd = ['qq', 'send', instance_id, message]
+            cmd = ['qq', 'send', instance_id_safe, message_safe]
             cmd_str = ' '.join([f'"{arg}"' if ' ' in arg else arg for arg in cmd])
             
             # 详细日志输出
-            logger.info(f'🚀 准备发送消息到实例: {instance_id}')
-            logger.info(f'📝 消息内容: {message}')
+            logger.info(f'🚀 准备发送消息到实例: {instance_id_safe}')
+            logger.info(f'📝 消息内容: {message_safe}')
             logger.info(f'🔧 执行命令: {cmd_str}')
             logger.info(f'📋 命令数组: {cmd}')
             
+            # 使用显式编码设置运行subprocess
             result = subprocess.run(
                 cmd,
-                capture_output=True, text=True, timeout=10
+                capture_output=True, 
+                text=True, 
+                timeout=10,
+                encoding='utf-8',
+                errors='replace'  # 处理编码错误
             )
+            
+            # 安全处理输出，确保编码正确
+            try:
+                stdout_safe = result.stdout.encode('utf-8', errors='replace').decode('utf-8') if result.stdout else ''
+                stderr_safe = result.stderr.encode('utf-8', errors='replace').decode('utf-8') if result.stderr else ''
+            except Exception as e:
+                logger.error(f"输出编码处理失败: {e}")
+                stdout_safe = str(result.stdout) if result.stdout else ''
+                stderr_safe = str(result.stderr) if result.stderr else ''
             
             # 详细结果日志
             logger.info(f'📊 命令返回码: {result.returncode}')
-            logger.info(f'📤 标准输出: {result.stdout}')
-            logger.info(f'📤 错误输出: {result.stderr}')
+            logger.info(f'📤 标准输出: {stdout_safe}')
+            logger.info(f'📤 错误输出: {stderr_safe}')
             
             if result.returncode == 0:
-                logger.info(f'✅ 消息发送成功到实例 {instance_id}')
-                return {'success': True, 'stdout': result.stdout, 'stderr': result.stderr}
+                logger.info(f'✅ 消息发送成功到实例 {instance_id_safe}')
+                return {'success': True, 'stdout': stdout_safe, 'stderr': stderr_safe}
             else:
-                error_msg = result.stderr or result.stdout
-                logger.error(f'❌ 消息发送失败到实例 {instance_id}: {error_msg}')
-                return {'success': False, 'error': error_msg, 'stdout': result.stdout, 'stderr': result.stderr}
+                error_msg = stderr_safe or stdout_safe or '未知错误'
+                logger.error(f'❌ 消息发送失败到实例 {instance_id_safe}: {error_msg}')
+                return {'success': False, 'error': error_msg, 'stdout': stdout_safe, 'stderr': stderr_safe}
                 
         except subprocess.TimeoutExpired:
             error_msg = '发送消息超时'
             logger.error(f'⏰ 向cliExtra实例 {instance_id} 发送消息超时（10秒）')
-            logger.error(f'🔧 超时命令: qq send {instance_id} -system "{message}"')
+            logger.error(f'🔧 超时命令: qq send {instance_id} "{message}"')
+            return {'success': False, 'error': error_msg}
+        except UnicodeDecodeError as e:
+            error_msg = f'字符编码错误: {str(e)}'
+            logger.error(f'🔤 向cliExtra实例 {instance_id} 发送消息编码错误: {e}')
             return {'success': False, 'error': error_msg}
         except Exception as e:
             logger.error(f'💥 向cliExtra实例 {instance_id} 发送消息异常: {str(e)}')
-            logger.error(f'🔧 失败命令: qq send {instance_id} -system "{message}"')
+            logger.error(f'🔧 失败命令: qq send {instance_id} "{message}"')
             logger.error(f'📋 异常类型: {type(e).__name__}')
             return {'success': False, 'error': str(e)}
     
@@ -674,26 +700,49 @@ class InstanceManager:
         try:
             self._check_cliExtra()
             
-            # 构建qq broadcast命令（使用qq别名）
-            cmd = ['qq', 'broadcast', message]
+            # 安全处理输入参数，确保UTF-8编码
+            try:
+                message_safe = message.encode('utf-8', errors='replace').decode('utf-8')
+                namespace_safe = namespace.encode('utf-8', errors='replace').decode('utf-8') if namespace else None
+            except Exception as e:
+                logger.error(f"广播参数编码处理失败: {e}")
+                return {'success': False, 'error': '参数包含无效字符'}
             
-            if namespace:
+            # 构建qq broadcast命令（使用qq别名）
+            cmd = ['qq', 'broadcast', message_safe]
+            
+            if namespace_safe:
                 # 如果指定了namespace，使用--namespace参数
-                cmd.extend(['--namespace', namespace])
+                cmd.extend(['--namespace', namespace_safe])
             elif broadcast_all:
                 # 如果要广播给所有namespace，添加--all参数（适配新默认行为）
                 cmd.append('--all')
             # 如果broadcast_all=False且没有namespace，则使用默认行为（只广播给default）
             
             logger.info(f"🔍 执行广播命令: {' '.join(cmd)}")
+            
+            # 使用显式编码设置运行subprocess
             result = subprocess.run(
                 cmd,
-                capture_output=True, text=True, timeout=30
+                capture_output=True, 
+                text=True, 
+                timeout=30,
+                encoding='utf-8',
+                errors='replace'  # 处理编码错误
             )
+            
+            # 安全处理输出
+            try:
+                stdout_safe = result.stdout.encode('utf-8', errors='replace').decode('utf-8') if result.stdout else ''
+                stderr_safe = result.stderr.encode('utf-8', errors='replace').decode('utf-8') if result.stderr else ''
+            except Exception as e:
+                logger.error(f"广播输出编码处理失败: {e}")
+                stdout_safe = str(result.stdout) if result.stdout else ''
+                stderr_safe = str(result.stderr) if result.stderr else ''
             
             if result.returncode == 0:
                 # 解析输出获取发送数量
-                output = result.stdout.strip()
+                output = stdout_safe.strip()
                 sent_count = 0
                 
                 # 尝试从输出中提取发送数量，寻找"发送给 X 个实例"或"广播给 X 个实例"的模式
@@ -714,10 +763,10 @@ class InstanceManager:
                 if sent_count == 0:
                     # 如果无法解析，获取指定namespace的运行实例数量作为估计
                     with self._lock:
-                        if namespace:
+                        if namespace_safe:
                             sent_count = len([inst for inst in self.instances.values() 
                                             if inst.status not in ['Not Running', 'Stopped', 'Terminated']
-                                            and getattr(inst, 'namespace', 'default') == namespace])
+                                            and getattr(inst, 'namespace', 'default') == namespace_safe])
                         else:
                             sent_count = len([inst for inst in self.instances.values() 
                                             if inst.status not in ['Not Running', 'Stopped', 'Terminated']])

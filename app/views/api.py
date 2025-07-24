@@ -329,34 +329,64 @@ def send_message():
 def send_message_new():
     """新的消息发送API - 支持指定实例和system实例"""
     try:
-        data = request.get_json()
+        # 安全获取JSON数据，处理编码问题
+        try:
+            data = request.get_json(force=True)
+        except UnicodeDecodeError as e:
+            logger.error(f"JSON解码错误: {e}")
+            return jsonify({'success': False, 'error': '消息包含不支持的字符'}), 400
+        except Exception as e:
+            logger.error(f"JSON解析错误: {e}")
+            return jsonify({'success': False, 'error': '请求格式错误'}), 400
+        
+        if not data:
+            return jsonify({'success': False, 'error': '请求数据为空'}), 400
+        
         target_instance = data.get('target_instance', '').strip()
         message = data.get('message', '').strip()
         
         if not target_instance or not message:
             return jsonify({'success': False, 'error': '缺少目标实例或消息内容'}), 400
         
-        logger.info(f"📤 发送消息到实例 {target_instance}: {message}")
+        # 安全处理消息内容，过滤或替换问题字符
+        try:
+            # 确保消息是有效的UTF-8字符串
+            message_safe = message.encode('utf-8', errors='replace').decode('utf-8')
+            target_safe = target_instance.encode('utf-8', errors='replace').decode('utf-8')
+            
+            # 移除控制字符，保留可打印字符
+            import re
+            message_clean = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', message_safe)
+            target_clean = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', target_safe)
+            
+        except Exception as e:
+            logger.error(f"字符串处理错误: {e}")
+            return jsonify({'success': False, 'error': '消息内容包含无效字符'}), 400
         
-        result = instance_manager.send_message(target_instance, message)
+        logger.info(f"📤 发送消息到实例 {target_clean}: {message_clean}")
+        
+        result = instance_manager.send_message(target_clean, message_clean)
         
         if result['success']:
-            logger.info(f"✅ 消息发送成功到 {target_instance}")
+            logger.info(f"✅ 消息发送成功到 {target_clean}")
             return jsonify({
                 'success': True,
-                'message': f'消息已发送给 {target_instance}',
-                'target': target_instance
+                'message': f'消息已发送给 {target_clean}',
+                'target': target_clean
             })
         else:
-            logger.error(f"❌ 消息发送失败到 {target_instance}: {result.get('error', 'Unknown error')}")
+            logger.error(f"❌ 消息发送失败到 {target_clean}: {result.get('error', 'Unknown error')}")
             return jsonify({
                 'success': False, 
                 'error': result.get('error', '发送失败')
             }), 500
             
+    except UnicodeDecodeError as e:
+        logger.error(f"UTF-8编码错误: {e}")
+        return jsonify({'success': False, 'error': '消息包含不支持的字符编码'}), 400
     except Exception as e:
         logger.error(f"发送消息异常: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': '服务器内部错误'}), 500
 
 @bp.route('/clean', methods=['POST'])
 def clean_all():

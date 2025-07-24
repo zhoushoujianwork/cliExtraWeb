@@ -98,13 +98,16 @@ async function broadcastToCurrentNamespace(message) {
     const currentNamespace = getCurrentNamespace() || 'q_cli';
     
     try {
+        // 安全处理消息内容
+        const safeMessage = sanitizeMessage(message);
+        
         const response = await fetch('/api/broadcast', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/json; charset=utf-8',
             },
             body: JSON.stringify({
-                message: message,
+                message: safeMessage,
                 namespace: currentNamespace
             })
         });
@@ -127,14 +130,18 @@ async function broadcastToCurrentNamespace(message) {
 // 发送给指定实例
 async function sendToSpecificInstance(instanceId, message) {
     try {
+        // 安全处理消息内容
+        const safeMessage = sanitizeMessage(message);
+        const safeInstanceId = sanitizeInstanceId(instanceId);
+        
         const response = await fetch('/api/send-message', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/json; charset=utf-8',
             },
             body: JSON.stringify({
-                target_instance: instanceId,
-                message: message
+                target_instance: safeInstanceId,
+                message: safeMessage
             })
         });
         
@@ -142,7 +149,7 @@ async function sendToSpecificInstance(instanceId, message) {
         
         if (result.success) {
             console.log('发送消息成功:', result);
-            showNotification(`消息已发送给 ${instanceId}`, 'success');
+            showNotification(`消息已发送给 ${safeInstanceId}`, 'success');
         } else {
             console.error('发送消息失败:', result.error);
             showNotification(`发送失败: ${result.error}`, 'error');
@@ -156,14 +163,18 @@ async function sendToSpecificInstance(instanceId, message) {
 // 发送给system实例
 async function sendToSystemInstance(systemTarget, message) {
     try {
+        // 安全处理消息内容
+        const safeMessage = sanitizeMessage(message);
+        const safeTarget = sanitizeInstanceId(systemTarget);
+        
         const response = await fetch('/api/send-message', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/json; charset=utf-8',
             },
             body: JSON.stringify({
-                target_instance: systemTarget,
-                message: message
+                target_instance: safeTarget,
+                message: safeMessage
             })
         });
         
@@ -171,7 +182,7 @@ async function sendToSystemInstance(systemTarget, message) {
         
         if (result.success) {
             console.log('发送给system实例成功:', result);
-            showNotification(`消息已发送给 ${systemTarget}`, 'success');
+            showNotification(`消息已发送给 ${safeTarget}`, 'success');
         } else {
             console.error('发送给system实例失败:', result.error);
             showNotification(`发送失败: ${result.error}`, 'error');
@@ -179,6 +190,8 @@ async function sendToSystemInstance(systemTarget, message) {
     } catch (error) {
         console.error('发送给system实例异常:', error);
         showNotification('发送消息失败', 'error');
+    }
+}
             console.log(`发送消息给实例 ${instanceId}:`, message);
             
             const response = await fetch('/api/send', {
@@ -616,7 +629,6 @@ function hideInstanceSuggestions() {
     }
     window.currentSelectedIndex = -1;
     window.suggestionItems = [];
-}
     suggestionBox.style.top = (rect.top - suggestionBox.offsetHeight - 5) + 'px';
     
     // 添加点击事件
@@ -1641,5 +1653,49 @@ function initInputPlaceholder() {
             characterData: true,
             subtree: true
         });
+    }
+}
+
+// 消息内容安全处理
+function sanitizeMessage(message) {
+    if (!message || typeof message !== 'string') {
+        return '';
+    }
+    
+    try {
+        // 移除控制字符，保留可打印字符和常用Unicode字符
+        let cleaned = message.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
+        
+        // 限制消息长度
+        if (cleaned.length > 1000) {
+            cleaned = cleaned.substring(0, 1000) + '...';
+        }
+        
+        return cleaned;
+    } catch (error) {
+        console.error('消息清理失败:', error);
+        return message.toString();
+    }
+}
+
+// 实例ID安全处理
+function sanitizeInstanceId(instanceId) {
+    if (!instanceId || typeof instanceId !== 'string') {
+        return '';
+    }
+    
+    try {
+        // 只保留字母、数字、下划线、连字符
+        let cleaned = instanceId.replace(/[^a-zA-Z0-9_-]/g, '');
+        
+        // 限制长度
+        if (cleaned.length > 100) {
+            cleaned = cleaned.substring(0, 100);
+        }
+        
+        return cleaned;
+    } catch (error) {
+        console.error('实例ID清理失败:', error);
+        return instanceId.toString();
     }
 }
