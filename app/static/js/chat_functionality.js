@@ -128,11 +128,15 @@ async function broadcastToCurrentNamespace(message) {
 }
 
 // 发送给指定实例
+// 发送给指定实例
 async function sendToSpecificInstance(instanceId, message) {
     try {
         // 安全处理消息内容
         const safeMessage = sanitizeMessage(message);
         const safeInstanceId = sanitizeInstanceId(instanceId);
+        
+        // 显示发送中状态
+        showNotification(`正在发送消息给 ${safeInstanceId}...`, 'info', 2000);
         
         const response = await fetch('/api/send-message', {
             method: 'POST',
@@ -149,14 +153,41 @@ async function sendToSpecificInstance(instanceId, message) {
         
         if (result.success) {
             console.log('发送消息成功:', result);
-            showNotification(`消息已发送给 ${safeInstanceId}`, 'success');
+            showNotification(`✅ ${result.message || `消息已发送给 ${safeInstanceId}`}`, 'success', 3000);
         } else {
-            console.error('发送消息失败:', result.error);
-            showNotification(`发送失败: ${result.error}`, 'error');
+            console.error('发送消息失败:', result);
+            
+            // 根据错误类型显示不同的提示
+            let errorMessage = result.error || '发送失败';
+            let notificationType = 'error';
+            let duration = 5000;
+            
+            // 特殊错误处理
+            if (errorMessage.includes('正忙')) {
+                notificationType = 'warning';
+                errorMessage = `⏳ ${errorMessage}`;
+                duration = 4000;
+            } else if (errorMessage.includes('不存在') || errorMessage.includes('未运行')) {
+                errorMessage = `❌ ${errorMessage}`;
+                duration = 6000;
+            } else if (errorMessage.includes('超时')) {
+                errorMessage = `⏰ ${errorMessage}`;
+                notificationType = 'warning';
+                duration = 4000;
+            } else {
+                errorMessage = `❌ 发送失败: ${errorMessage}`;
+            }
+            
+            showNotification(errorMessage, notificationType, duration);
+            
+            // 如果有技术详情，记录到控制台
+            if (result.technical_error) {
+                console.error('技术详情:', result.technical_error);
+            }
         }
     } catch (error) {
         console.error('发送消息异常:', error);
-        showNotification('发送消息失败', 'error');
+        showNotification('❌ 网络错误，请检查连接后重试', 'error', 5000);
     }
 }
 
@@ -166,6 +197,9 @@ async function sendToSystemInstance(systemTarget, message) {
         // 安全处理消息内容
         const safeMessage = sanitizeMessage(message);
         const safeTarget = sanitizeInstanceId(systemTarget);
+        
+        // 显示发送中状态
+        showNotification(`正在发送消息给 ${safeTarget}...`, 'info', 2000);
         
         const response = await fetch('/api/send-message', {
             method: 'POST',
@@ -182,14 +216,41 @@ async function sendToSystemInstance(systemTarget, message) {
         
         if (result.success) {
             console.log('发送给system实例成功:', result);
-            showNotification(`消息已发送给 ${safeTarget}`, 'success');
+            showNotification(`✅ ${result.message || `消息已发送给 ${safeTarget}`}`, 'success', 3000);
         } else {
-            console.error('发送给system实例失败:', result.error);
-            showNotification(`发送失败: ${result.error}`, 'error');
+            console.error('发送给system实例失败:', result);
+            
+            // 根据错误类型显示不同的提示
+            let errorMessage = result.error || '发送失败';
+            let notificationType = 'error';
+            let duration = 5000;
+            
+            // 特殊错误处理
+            if (errorMessage.includes('正忙')) {
+                notificationType = 'warning';
+                errorMessage = `⏳ ${errorMessage}`;
+                duration = 4000;
+            } else if (errorMessage.includes('不存在') || errorMessage.includes('未运行')) {
+                errorMessage = `❌ ${errorMessage}`;
+                duration = 6000;
+            } else if (errorMessage.includes('超时')) {
+                errorMessage = `⏰ ${errorMessage}`;
+                notificationType = 'warning';
+                duration = 4000;
+            } else {
+                errorMessage = `❌ 发送失败: ${errorMessage}`;
+            }
+            
+            showNotification(errorMessage, notificationType, duration);
+            
+            // 如果有技术详情，记录到控制台
+            if (result.technical_error) {
+                console.error('技术详情:', result.technical_error);
+            }
         }
     } catch (error) {
         console.error('发送给system实例异常:', error);
-        showNotification('发送消息失败', 'error');
+        showNotification('❌ 网络错误，请检查连接后重试', 'error', 5000);
     }
 }
 

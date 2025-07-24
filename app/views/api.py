@@ -8,6 +8,7 @@ import subprocess
 import os
 import json
 import platform
+import datetime
 
 from app.services.instance_manager import instance_manager
 from app.services.chat_manager import chat_manager
@@ -422,6 +423,55 @@ def test_status_reading():
     except Exception as e:
         logger.error(f"测试状态读取失败: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@bp.route('/debug-send', methods=['POST'])
+def debug_send_message():
+    """调试发送消息功能 - 返回详细的调试信息"""
+    try:
+        data = request.get_json(force=True)
+        target_instance = data.get('target_instance', '').strip()
+        message = data.get('message', '').strip()
+        
+        if not target_instance or not message:
+            return jsonify({'success': False, 'error': '缺少目标实例或消息内容'}), 400
+        
+        logger.info(f"🐛 调试发送消息: {target_instance} <- {message[:50]}...")
+        
+        # 获取详细的发送结果
+        result = instance_manager.send_message(target_instance, message)
+        
+        # 添加调试信息
+        debug_info = {
+            'timestamp': datetime.datetime.now().isoformat(),
+            'target_instance': target_instance,
+            'message_length': len(message),
+            'message_preview': message[:100] + ('...' if len(message) > 100 else ''),
+            'send_result': result
+        }
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': result.get('message', f'消息已发送给 {target_instance}'),
+                'debug_info': debug_info
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', '发送失败'),
+                'debug_info': debug_info
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"调试发送消息异常: {e}")
+        return jsonify({
+            'success': False, 
+            'error': '调试发送失败',
+            'debug_info': {
+                'exception': str(e),
+                'exception_type': type(e).__name__
+            }
+        }), 500
 
 @bp.route('/clean', methods=['POST'])
 def clean_all():

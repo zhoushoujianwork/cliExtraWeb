@@ -555,7 +555,7 @@ class InstanceManager:
             return {'success': False, 'error': str(e), 'instances': []}
     
     def send_message(self, instance_id: str, message: str) -> Dict[str, any]:
-        """向cliExtra实例发送消息"""
+        """向cliExtra实例发送消息 - 增强版，包含状态检查"""
         try:
             self._check_cliExtra()
             
@@ -567,27 +567,38 @@ class InstanceManager:
                 logger.error(f"参数编码处理失败: {e}")
                 return {'success': False, 'error': '参数包含无效字符'}
             
-            # 构建完整命令（qq send不需要-system参数）
+            # 1. 首先检查实例状态
+            logger.info(f'🔍 检查实例 {instance_id_safe} 状态...')
+            status_check = self._check_instance_status_for_send(instance_id_safe)
+            if not status_check['can_send']:
+                logger.warning(f'⚠️ 实例 {instance_id_safe} 状态检查失败: {status_check["reason"]}')
+                return {
+                    'success': False, 
+                    'error': status_check['reason'],
+                    'status_info': status_check.get('status_info', {})
+                }
+            
+            # 2. 构建发送命令
             cmd = ['qq', 'send', instance_id_safe, message_safe]
             cmd_str = ' '.join([f'"{arg}"' if ' ' in arg else arg for arg in cmd])
             
             # 详细日志输出
             logger.info(f'🚀 准备发送消息到实例: {instance_id_safe}')
-            logger.info(f'📝 消息内容: {message_safe}')
+            logger.info(f'📝 消息内容: {message_safe[:100]}{"..." if len(message_safe) > 100 else ""}')
             logger.info(f'🔧 执行命令: {cmd_str}')
             logger.info(f'📋 命令数组: {cmd}')
             
-            # 使用显式编码设置运行subprocess
+            # 3. 执行发送命令
             result = subprocess.run(
                 cmd,
                 capture_output=True, 
                 text=True, 
-                timeout=10,
+                timeout=15,  # 增加超时时间
                 encoding='utf-8',
-                errors='replace'  # 处理编码错误
+                errors='replace'
             )
             
-            # 安全处理输出，确保编码正确
+            # 4. 处理命令输出
             try:
                 stdout_safe = result.stdout.encode('utf-8', errors='replace').decode('utf-8') if result.stdout else ''
                 stderr_safe = result.stderr.encode('utf-8', errors='replace').decode('utf-8') if result.stderr else ''
@@ -599,25 +610,164 @@ class InstanceManager:
             # 详细结果日志
             logger.info(f'📊 命令返回码: {result.returncode}')
             logger.info(f'📤 标准输出: {stdout_safe}')
-            logger.info(f'📤 错误输出: {stderr_safe}')
+            if stderr_safe:
+                logger.info(f'📤 错误输出: {stderr_safe}')
             
+            # 5. 分析结果并返回
             if result.returncode == 0:
                 logger.info(f'✅ 消息发送成功到实例 {instance_id_safe}')
-                return {'success': True, 'stdout': stdout_safe, 'stderr': stderr_safe}
+                return {
+                    'success': True, 
+                    'stdout': stdout_safe, 
+                    'stderr': stderr_safe,
+                    'message': f'消息已成功发送给 {instance_id_safe}'
+                }
             else:
-                error_msg = stderr_safe or stdout_safe or '未知错误'
-                logger.error(f'❌ 消息发送失败到实例 {instance_id_safe}: {error_msg}')
-                return {'success': False, 'error': error_msg, 'stdout': stdout_safe, 'stderr': stderr_safe}
+                # 分析具体的错误原因
+                error_analysis = self._analyze_send_error(result.returncode, stdout_safe, stderr_safe, instance_id_safe)
+                logger.error(f'❌ 消息发送失败到实例 {instance_id_safe}: {error_analysis["user_message"]}')
+                return {
+                    'success': False, 
+                    'error': error_analysis['user_message'],
+                    'technical_error': error_analysis['technical_details'],
+                    'stdout': stdout_safe, 
+                    'stderr': stderr_safe,
+                    'return_code': result.returncode
+                }
                 
         except subprocess.TimeoutExpired:
-            error_msg = '发送消息超时'
-            logger.error(f'⏰ 向cliExtra实例 {instance_id} 发送消息超时（10秒）')
-            logger.error(f'🔧 超时命令: qq send {instance_id} "{message}"')
+            error_msg = f'发送消息超时（15秒），实例 {instance_id} 可能无响应'
+            logger.error(f'⏰ 向cliExtra实例 {instance_id} 发送消息超时')
+            logger.error(f'🔧 超时命令: qq send {instance_id} "{message[:50]}..."')
             return {'success': False, 'error': error_msg}
         except UnicodeDecodeError as e:
-            error_msg = f'字符编码错误: {str(e)}'
+            error_msg = f'消息包含不支持的字符编码'
             logger.error(f'🔤 向cliExtra实例 {instance_id} 发送消息编码错误: {e}')
             return {'success': False, 'error': error_msg}
+        except Exception as e:
+            logger.error(f'💥 向cliExtra实例 {instance_id} 发送消息异常: {str(e)}')
+            logger.error(f'🔧 失败命令: qq send {instance_id} "{message[:50]}..."')
+            logger.error(f'📋 异常类型: {type(e).__name__}')
+            return {'success': False, 'error': f'发送消息时发生系统错误: {str(e)}'}
+    
+    def _check_instance_status_for_send(self, instance_id: str) -> Dict[str, any]:
+        """检查实例状态是否可以发送消息"""
+        try:
+            # 使用qq status命令检查实例状态
+            cmd = ['qq', 'status', instance_id]
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                encoding='utf-8',
+                errors='replace'
+            )
+            
+            logger.debug(f'状态检查命令: {" ".join(cmd)}')
+            logger.debug(f'状态检查返回码: {result.returncode}')
+            logger.debug(f'状态检查输出: {result.stdout}')
+            
+            if result.returncode == 0:
+                # 解析状态输出
+                status_output = result.stdout.strip().lower()
+                
+                if 'idle' in status_output or 'available' in status_output:
+                    return {
+                        'can_send': True,
+                        'reason': '实例状态正常，可以发送消息',
+                        'status_info': {'status': 'idle', 'output': result.stdout}
+                    }
+                elif 'busy' in status_output or 'processing' in status_output:
+                    return {
+                        'can_send': False,
+                        'reason': '目标实例正忙，请稍后再试',
+                        'status_info': {'status': 'busy', 'output': result.stdout}
+                    }
+                else:
+                    # 状态不明确，但允许发送
+                    return {
+                        'can_send': True,
+                        'reason': '实例状态未知，尝试发送',
+                        'status_info': {'status': 'unknown', 'output': result.stdout}
+                    }
+            else:
+                # 状态检查失败，可能实例不存在
+                error_output = result.stderr or result.stdout or '无错误信息'
+                if 'not found' in error_output.lower() or 'does not exist' in error_output.lower():
+                    return {
+                        'can_send': False,
+                        'reason': f'实例 {instance_id} 不存在或未运行',
+                        'status_info': {'status': 'not_found', 'error': error_output}
+                    }
+                else:
+                    # 其他错误，允许尝试发送
+                    return {
+                        'can_send': True,
+                        'reason': '状态检查失败，但允许尝试发送',
+                        'status_info': {'status': 'check_failed', 'error': error_output}
+                    }
+                    
+        except subprocess.TimeoutExpired:
+            logger.warning(f'实例 {instance_id} 状态检查超时')
+            return {
+                'can_send': True,
+                'reason': '状态检查超时，允许尝试发送',
+                'status_info': {'status': 'timeout'}
+            }
+        except Exception as e:
+            logger.error(f'状态检查异常: {e}')
+            return {
+                'can_send': True,
+                'reason': '状态检查异常，允许尝试发送',
+                'status_info': {'status': 'error', 'error': str(e)}
+            }
+    
+    def _analyze_send_error(self, return_code: int, stdout: str, stderr: str, instance_id: str) -> Dict[str, str]:
+        """分析发送错误并返回用户友好的错误信息"""
+        error_output = (stderr or stdout or '').lower()
+        
+        # 常见错误模式分析
+        if 'not found' in error_output or 'does not exist' in error_output:
+            return {
+                'user_message': f'实例 {instance_id} 不存在或未运行，请检查实例名称',
+                'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
+            }
+        elif 'busy' in error_output or 'processing' in error_output:
+            return {
+                'user_message': '目标实例正忙，请稍后再试',
+                'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
+            }
+        elif 'timeout' in error_output:
+            return {
+                'user_message': '实例响应超时，可能负载过高',
+                'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
+            }
+        elif 'permission' in error_output or 'access denied' in error_output:
+            return {
+                'user_message': '权限不足，无法发送消息到该实例',
+                'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
+            }
+        elif 'connection' in error_output or 'network' in error_output:
+            return {
+                'user_message': '网络连接问题，无法连接到实例',
+                'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
+            }
+        elif return_code == 1:
+            return {
+                'user_message': '命令执行失败，请检查实例状态和参数',
+                'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
+            }
+        elif return_code == 2:
+            return {
+                'user_message': '命令参数错误，请联系管理员',
+                'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
+            }
+        else:
+            return {
+                'user_message': f'发送失败，错误代码: {return_code}。请稍后重试或联系管理员',
+                'technical_details': f'Return code: {return_code}, Stdout: {stdout}, Stderr: {stderr}'
+            }
         except Exception as e:
             logger.error(f'💥 向cliExtra实例 {instance_id} 发送消息异常: {str(e)}')
             logger.error(f'🔧 失败命令: qq send {instance_id} "{message}"')
