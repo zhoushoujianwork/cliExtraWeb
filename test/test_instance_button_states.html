@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实例按钮状态测试</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* 实例按钮状态样式 */
+        .instance-item .btn-group .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .instance-item .btn-secondary:disabled {
+            background-color: #6c757d;
+            border-color: #6c757d;
+            color: #fff;
+            opacity: 0.6;
+        }
+
+        .instance-item .btn-secondary:disabled:hover {
+            background-color: #6c757d;
+            border-color: #6c757d;
+            transform: none;
+        }
+
+        /* 实例状态指示器 */
+        .instance-item .badge.bg-warning {
+            background-color: #ffc107 !important;
+            color: #000;
+        }
+
+        .instance-item .badge.bg-success {
+            background-color: #198754 !important;
+        }
+
+        .instance-item .badge.bg-secondary {
+            background-color: #6c757d !important;
+        }
+
+        /* 按钮悬停效果优化 */
+        .instance-item .btn:not(:disabled):hover {
+            transform: translateY(-1px);
+            transition: all 0.2s ease;
+        }
+
+        .instance-item .btn:disabled {
+            transform: none !important;
+            transition: none !important;
+        }
+
+        .instance-item {
+            transition: all 0.2s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h2>实例按钮状态测试</h2>
+        <p class="text-muted">测试不同状态下实例按钮的显示效果</p>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>运行中的实例 (Attached)</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="instance-item mb-2 p-2 border rounded">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>cliextra_running_12345</strong>
+                                    <span class="badge bg-success ms-2">Attached</span>
+                                    <br><small class="text-muted">ns: default</small>
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary" title="监控输出">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-outline-warning" onclick="testStopInstance('running')" title="停止实例">
+                                        <i class="fas fa-stop"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" onclick="testCleanInstance('running')" title="清理实例数据">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>已停止的实例 (Detached)</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="instance-item mb-2 p-2 border rounded">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>cliextra_stopped_67890</strong>
+                                    <span class="badge bg-warning ms-2">Detached</span>
+                                    <br><small class="text-muted">ns: default</small>
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary" title="监控输出">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="testStopInstance('stopped')" title="实例已停止" disabled>
+                                        <i class="fas fa-stop"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" onclick="testCleanInstance('stopped')" title="清理实例数据">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>监控中的实例</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="instance-item mb-2 p-2 border rounded instance-selected">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>cliextra_monitoring_11111</strong>
+                                    <span class="badge bg-success ms-2">Attached</span>
+                                    <span class="badge bg-info ms-1"><i class="fas fa-eye"></i> 监控中</span>
+                                    <br><small class="text-muted">ns: frontend</small>
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-primary" title="监控输出" disabled>
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-outline-warning" onclick="testStopInstance('monitoring')" title="停止实例">
+                                        <i class="fas fa-stop"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" onclick="testCleanInstance('monitoring')" title="清理实例数据">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>状态说明</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <h6>实例状态</h6>
+                            <ul class="list-unstyled">
+                                <li><span class="badge bg-success">Attached</span> - 实例正在运行</li>
+                                <li><span class="badge bg-warning">Detached</span> - 实例已停止</li>
+                                <li><span class="badge bg-secondary">Unknown</span> - 状态未知</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6>按钮状态</h6>
+                            <ul class="list-unstyled">
+                                <li><button class="btn btn-outline-warning btn-sm me-2"><i class="fas fa-stop"></i></button> 可以停止</li>
+                                <li><button class="btn btn-secondary btn-sm me-2" disabled><i class="fas fa-stop"></i></button> 已停止（灰色禁用）</li>
+                                <li><button class="btn btn-primary btn-sm me-2" disabled><i class="fas fa-eye"></i></button> 正在监控</li>
+                            </ul>
+                        </div>
+                        
+                        <div>
+                            <h6>交互测试</h6>
+                            <p class="text-muted small">点击上面的按钮测试不同状态下的交互效果</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function testStopInstance(type) {
+            const button = event.target.closest('button');
+            
+            if (button && button.disabled) {
+                alert('实例已经停止，无法再次停止');
+                return;
+            }
+            
+            switch(type) {
+                case 'running':
+                    alert('模拟停止运行中的实例');
+                    // 模拟停止后的状态变化
+                    setTimeout(() => {
+                        button.className = 'btn btn-secondary';
+                        button.disabled = true;
+                        button.title = '实例已停止';
+                        
+                        const badge = button.closest('.instance-item').querySelector('.badge');
+                        badge.className = 'badge bg-warning ms-2';
+                        badge.textContent = 'Detached';
+                    }, 1000);
+                    break;
+                case 'stopped':
+                    alert('实例已经停止');
+                    break;
+                case 'monitoring':
+                    alert('停止监控中的实例');
+                    break;
+            }
+        }
+        
+        function testCleanInstance(type) {
+            if (confirm(`确定要清理实例数据吗？\n\n类型: ${type}`)) {
+                alert(`模拟清理 ${type} 实例的数据`);
+                
+                // 模拟清理动画
+                const instanceItem = event.target.closest('.instance-item');
+                instanceItem.style.transition = 'all 0.3s ease';
+                instanceItem.style.opacity = '0';
+                instanceItem.style.transform = 'translateX(-20px)';
+                
+                setTimeout(() => {
+                    instanceItem.style.display = 'none';
+                }, 300);
+            }
+        }
+        
+        // 添加选中状态样式
+        const style = document.createElement('style');
+        style.textContent = `
+            .instance-selected {
+                background-color: #f8f9fa;
+                border-color: #007bff !important;
+                box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

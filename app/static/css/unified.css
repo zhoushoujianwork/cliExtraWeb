@@ -715,3 +715,48 @@
 
 .rounded { border-radius: var(--border-radius); }
 .rounded-sm { border-radius: 4px; }
+
+/* === 实例按钮状态样式 === */
+.instance-item .btn-group .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.instance-item .btn-secondary:disabled {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: #fff;
+    opacity: 0.6;
+}
+
+.instance-item .btn-secondary:disabled:hover {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    transform: none;
+}
+
+/* 实例状态指示器 */
+.instance-item .badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #000;
+}
+
+.instance-item .badge.bg-success {
+    background-color: #198754 !important;
+}
+
+.instance-item .badge.bg-secondary {
+    background-color: #6c757d !important;
+}
+
+/* 按钮悬停效果优化 */
+.instance-item .btn:not(:disabled):hover {
+    transform: translateY(-1px);
+    transition: all 0.2s ease;
+}
+
+.instance-item .btn:disabled {
+    transform: none !important;
+    transition: none !important;
+}

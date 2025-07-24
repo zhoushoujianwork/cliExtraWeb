@@ -478,6 +478,12 @@ function updateInstancesList(instances) {
         const statusClass = instance.status === 'Attached' ? 'success' : 
                            instance.status === 'Detached' ? 'warning' : 'secondary';
         
+        // 根据实例状态确定停止按钮的样式和状态
+        const isDetached = instance.status === 'Detached';
+        const stopButtonClass = isDetached ? 'btn-secondary' : 'btn-outline-warning';
+        const stopButtonDisabled = isDetached ? 'disabled' : '';
+        const stopButtonTitle = isDetached ? '实例已停止' : '停止实例';
+        
         instanceDiv.innerHTML = `
             <div class="d-flex justify-content-between align-items-center">
                 <div>
@@ -495,7 +501,10 @@ function updateInstancesList(instances) {
                             ${isCurrentlyMonitoring ? 'disabled' : ''}>
                         <i class="fas fa-eye"></i>
                     </button>
-                    <button class="btn btn-outline-warning" onclick="stopInstance('${instance.id}')" title="停止实例" ${instance.status === 'Detached' ? 'disabled' : ''}>
+                    <button class="btn ${stopButtonClass}" 
+                            onclick="stopInstance('${instance.id}')" 
+                            title="${stopButtonTitle}" 
+                            ${stopButtonDisabled}>
                         <i class="fas fa-stop"></i>
                     </button>
                     <button class="btn btn-outline-danger" onclick="cleanInstance('${instance.id}')" title="清理实例数据">

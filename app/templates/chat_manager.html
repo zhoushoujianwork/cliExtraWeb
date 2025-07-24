@@ -1250,9 +1250,15 @@ function loadInstances() {
 
 // 停止实例
 function stopInstance(instanceId) {
+    // 检查按钮是否被禁用（实例已停止）
+    const button = event.target.closest('button');
+    if (button && button.disabled) {
+        showNotification('实例已经停止', 'info');
+        return;
+    }
+    
     if (confirm(`确定要停止实例 ${instanceId} 吗？`)) {
         // 显示加载状态
-        const button = event.target.closest('button');
         if (button) {
             const originalContent = button.innerHTML;
             button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
