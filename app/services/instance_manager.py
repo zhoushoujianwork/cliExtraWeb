@@ -204,7 +204,7 @@ class InstanceManager:
         """获取指定实例"""
         return self.instances.get(instance_id)
     
-    def get_instances_by_namespace(self, namespace: str) -> List[Dict[str, any]]:
+    def get_instances_by_namespace(self, namespace: str) -> Dict[str, any]:
         """获取指定namespace的实例列表"""
         try:
             self._check_cliExtra()
@@ -217,7 +217,7 @@ class InstanceManager:
             
             if result.returncode != 0:
                 logger.error(f"获取namespace {namespace} 实例列表失败: {result.stderr}")
-                return []
+                return {'success': False, 'error': result.stderr, 'instances': []}
             
             # 解析JSON输出
             try:
@@ -255,15 +255,15 @@ class InstanceManager:
                     instances.append(instance_info)
                 
                 logger.info(f"获取到namespace {namespace} 的 {len(instances)} 个实例")
-                return instances
+                return {'success': True, 'instances': instances}
                 
             except json.JSONDecodeError as e:
                 logger.error(f"解析namespace {namespace} 实例列表JSON失败: {e}")
-                return []
+                return {'success': False, 'error': f'JSON解析失败: {str(e)}', 'instances': []}
                 
         except Exception as e:
             logger.error(f"获取namespace {namespace} 实例列表失败: {str(e)}")
-            return []
+            return {'success': False, 'error': str(e), 'instances': []}
     
     def send_message(self, instance_id: str, message: str) -> Dict[str, any]:
         """向cliExtra实例发送消息"""
