@@ -106,8 +106,88 @@
     flex: 1;
     overflow-y: auto;
     padding: 0;
-    /* 移除固定高度，使用flex布局自动计算 */
-    min-height: 0; /* 允许flex item缩小 */
+    /* 支持拖拉调整高度 */
+    min-height: 200px; /* 最小高度 */
+    max-height: 80vh;  /* 最大高度 */
+    resize: vertical;  /* 允许垂直调整大小 */
+    position: relative;
+}
+
+/* 自定义拖拉手柄 */
+.chat-messages::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 8px;
+    background: linear-gradient(to bottom, transparent, #e9ecef);
+    cursor: ns-resize;
+    border-bottom: 2px solid #dee2e6;
+    transition: all 0.2s ease;
+}
+
+.chat-messages:hover::after {
+    background: linear-gradient(to bottom, transparent, #007bff);
+    border-bottom-color: #007bff;
+}
+
+/* 拖拉时的视觉反馈 */
+.chat-messages.resizing {
+    user-select: none;
+    transition: none;
+}
+
+.chat-messages.resizing::after {
+    background: linear-gradient(to bottom, transparent, #007bff);
+    border-bottom-color: #007bff;
+    box-shadow: 0 2px 4px rgba(0,123,255,0.3);
+}
+
+/* 拖拉手柄样式 */
+.chat-resize-handle {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 12px;
+    background: linear-gradient(to bottom, transparent, #f8f9fa);
+    cursor: ns-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-top: 1px solid #dee2e6;
+    transition: all 0.2s ease;
+    z-index: 10;
+}
+
+.chat-resize-handle:hover {
+    background: linear-gradient(to bottom, transparent, #e3f2fd);
+    border-top-color: #007bff;
+}
+
+.chat-resize-handle i {
+    font-size: 10px;
+    color: #6c757d;
+    opacity: 0.6;
+    transition: all 0.2s ease;
+}
+
+.chat-resize-handle:hover i {
+    color: #007bff;
+    opacity: 1;
+}
+
+/* 拖拉时的手柄样式 */
+.chat-messages.resizing .chat-resize-handle {
+    background: linear-gradient(to bottom, transparent, #e3f2fd);
+    border-top-color: #007bff;
+    box-shadow: 0 2px 4px rgba(0,123,255,0.2);
+}
+
+.chat-messages.resizing .chat-resize-handle i {
+    color: #007bff;
+    opacity: 1;
 }
 
 .chat-input-area {
@@ -1403,6 +1483,118 @@ function manualRefresh() {
     console.log('✅ 统一刷新操作完成');
 }
 
+// 聊天记录框拖拉调整高度功能
+function initChatMessagesResize() {
+    const chatMessages = document.getElementById('chatMessages');
+    if (!chatMessages) return;
+    
+    let isResizing = false;
+    let startY = 0;
+    let startHeight = 0;
+    
+    // 创建拖拉手柄
+    const resizeHandle = document.createElement('div');
+    resizeHandle.className = 'chat-resize-handle';
+    resizeHandle.innerHTML = '<i class="fas fa-grip-lines"></i>';
+    chatMessages.appendChild(resizeHandle);
+    
+    // 鼠标按下开始拖拉
+    resizeHandle.addEventListener('mousedown', startResize);
+    
+    // 触摸设备支持
+    resizeHandle.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        startResize({
+            clientY: touch.clientY,
+            preventDefault: () => {}
+        });
+    });
+    
+    function startResize(e) {
+        isResizing = true;
+        startY = e.clientY;
+        startHeight = parseInt(document.defaultView.getComputedStyle(chatMessages).height, 10);
+        
+        chatMessages.classList.add('resizing');
+        document.body.style.cursor = 'ns-resize';
+        document.body.style.userSelect = 'none';
+        
+        e.preventDefault();
+    }
+    
+    // 鼠标移动调整高度
+    document.addEventListener('mousemove', handleResize);
+    document.addEventListener('touchmove', function(e) {
+        if (!isResizing) return;
+        e.preventDefault();
+        const touch = e.touches[0];
+        handleResize({
+            clientY: touch.clientY,
+            preventDefault: () => {}
+        });
+    });
+    
+    function handleResize(e) {
+        if (!isResizing) return;
+        
+        const deltaY = e.clientY - startY;
+        const newHeight = startHeight + deltaY;
+        
+        // 限制高度范围
+        const minHeight = 200;
+        const maxHeight = window.innerHeight * 0.8;
+        const clampedHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
+        
+        chatMessages.style.height = clampedHeight + 'px';
+        chatMessages.style.flex = 'none'; // 禁用flex自动调整
+        
+        // 保存用户设置
+        localStorage.setItem('chatMessagesHeight', clampedHeight);
+        
+        e.preventDefault();
+    }
+    
+    // 鼠标释放结束拖拉
+    document.addEventListener('mouseup', endResize);
+    document.addEventListener('touchend', endResize);
+    
+    function endResize() {
+        if (isResizing) {
+            isResizing = false;
+            chatMessages.classList.remove('resizing');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            
+            // 显示调整完成提示
+            if (typeof showNotification === 'function') {
+                const currentHeight = parseInt(chatMessages.style.height);
+                showNotification(`📏 聊天记录框高度已调整为 ${currentHeight}px`, 'info', 2000);
+            }
+        }
+    }
+    
+    // 双击重置高度
+    resizeHandle.addEventListener('dblclick', function() {
+        chatMessages.style.height = '';
+        chatMessages.style.flex = '1';
+        localStorage.removeItem('chatMessagesHeight');
+        
+        if (typeof showNotification === 'function') {
+            showNotification('📏 聊天记录框高度已重置为自动', 'info', 2000);
+        }
+    });
+    
+    // 恢复用户设置的高度
+    const savedHeight = localStorage.getItem('chatMessagesHeight');
+    if (savedHeight) {
+        chatMessages.style.height = savedHeight + 'px';
+        chatMessages.style.flex = 'none';
+    }
+    
+    console.log('✅ 聊天记录框拖拉调整功能已初始化');
+}
+
 // Namespace切换辅助函数
 function clearSelectedInstance() {
     // 清除当前选中的实例
@@ -1455,6 +1647,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 延迟初始化（可能需要等待脚本加载）
     delayedSafeCall('initToolbar', 500, 3);
     delayedSafeCall('initInputPlaceholder', 500, 3);
+    delayedSafeCall('initChatMessagesResize', 500, 3);
     
     // 添加路径类型切换监听器
     const localPathRadio = document.getElementById('localPath');
