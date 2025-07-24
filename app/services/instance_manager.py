@@ -1191,9 +1191,9 @@ class InstanceManager:
                     self.stop_instance(instance['id'])
                     self.clean_instance(instance['id'])
             
-            # 使用 cliExtra 删除 namespace（如果支持的话）
+            # 使用 qq ns delete 命令删除 namespace
             result = subprocess.run(
-                ['cliExtra', 'namespace', 'delete', name],
+                ['qq', 'ns', 'delete', name],
                 capture_output=True, text=True, timeout=30
             )
             
@@ -1201,9 +1201,10 @@ class InstanceManager:
                 logger.info(f'成功删除 namespace: {name}')
                 return {'success': True, 'message': f'Namespace "{name}" 删除成功'}
             else:
-                # 备用删除方案
-                logger.warning(f'cliExtra 不支持 namespace 删除命令，使用备用方案')
-                return self._delete_namespace_fallback(name)
+                # 如果qq命令失败，记录错误信息
+                error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
+                logger.error(f'删除 namespace {name} 失败: {error_msg}')
+                return {'success': False, 'error': f'删除失败: {error_msg}'}
                 
         except subprocess.TimeoutExpired:
             return {'success': False, 'error': '删除 namespace 超时'}
