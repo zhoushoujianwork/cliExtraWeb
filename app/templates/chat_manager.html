@@ -677,18 +677,13 @@
                     <!-- 角色选择 -->
                     <div class="mb-3">
                         <label for="instanceRole" class="form-label">实例角色</label>
-                        <select class="form-select" id="instanceRole" required>
+                        <select class="form-select" id="instanceRole">
                             <option value="">请选择角色</option>
-                            <option value="fullstack">全栈工程师</option>
-                            <option value="frontend">前端工程师</option>
-                            <option value="backend">后端工程师</option>
-                            <option value="devops">运维工程师</option>
-                            <option value="test">测试工程师</option>
-                            <option value="reviewer">代码审查工程师</option>
+                            <!-- 角色选项将通过JavaScript动态加载 -->
                         </select>
                         <div class="form-text">
                             <i class="fas fa-user-tag"></i> 
-                            选择实例的专业角色
+                            选择实例的专业角色（可选）
                         </div>
                     </div>
                     
@@ -1518,6 +1513,9 @@ function showCreateInstanceModal() {
     document.getElementById('localPath').checked = true;
     updatePathHelpText();
     
+    // 加载角色列表
+    loadAvailableRoles();
+    
     // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('createInstanceModal'));
     modal.show();
@@ -1555,6 +1553,51 @@ function updatePathHelpText() {
         pathInput.placeholder = '例如: https://github.com/user/repo.git';
         browseBtn.style.display = 'none';
         browseBtn.disabled = true;
+    }
+}
+
+// 动态加载可用角色列表
+async function loadAvailableRoles() {
+    const roleSelect = document.getElementById('instanceRole');
+    
+    try {
+        // 显示加载状态
+        roleSelect.innerHTML = '<option value="">加载角色列表中...</option>';
+        roleSelect.disabled = true;
+        
+        const response = await fetch('/api/roles');
+        const result = await response.json();
+        
+        if (result.success && result.roles) {
+            // 清空现有选项
+            roleSelect.innerHTML = '<option value="">请选择角色（可选）</option>';
+            
+            // 添加角色选项
+            result.roles.forEach(role => {
+                const option = document.createElement('option');
+                option.value = role.name || role;
+                option.textContent = role.display_name || role.name || role;
+                
+                // 如果有描述，添加到title属性
+                if (role.description) {
+                    option.title = role.description;
+                }
+                
+                roleSelect.appendChild(option);
+            });
+            
+            roleSelect.disabled = false;
+        } else {
+            // 加载失败，显示默认选项
+            roleSelect.innerHTML = '<option value="">请选择角色（可选）</option>';
+            roleSelect.disabled = false;
+            console.warn('加载角色列表失败:', result.error);
+        }
+    } catch (error) {
+        console.error('加载角色列表失败:', error);
+        // 出错时显示默认选项
+        roleSelect.innerHTML = '<option value="">请选择角色（可选）</option>';
+        roleSelect.disabled = false;
     }
 }
 
@@ -2088,11 +2131,6 @@ async function createInstanceFromModal() {
     const isLocal = document.getElementById('localPath').checked;
     
     // 验证必填字段
-    if (!role) {
-        alert('请选择实例角色');
-        return;
-    }
-    
     if (!path) {
         alert('请输入路径');
         return;
