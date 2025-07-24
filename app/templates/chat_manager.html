@@ -396,6 +396,29 @@
 .message-time {
     font-size: 0.75rem;
 }
+
+/* 实例列表项样式 */
+.instance-item {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.instance-item:hover {
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+}
+
+/* 选中状态的实例项 */
+.instance-item.instance-selected {
+    background-color: #e3f2fd;
+    border-color: #2196f3;
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.15);
+}
+
+.instance-item.instance-selected:hover {
+    background-color: #e1f5fe;
+    border-color: #1976d2;
+}
 </style>
 {% endblock %}
 
@@ -992,6 +1015,11 @@ function startMonitoring(instanceId) {
     
     currentMonitoringInstance = instanceId;
     
+    // 更新实例列表的选中状态
+    if (typeof updateInstanceSelection === 'function') {
+        updateInstanceSelection(instanceId);
+    }
+    
     // 重置为只读模式
     if (isInteractiveMode) {
         isInteractiveMode = false;
@@ -1025,6 +1053,11 @@ function stopMonitoring() {
         } else {
             // 如果是只读模式，停止日志监控
             socket.emit('stop_terminal_monitoring', {instance_id: currentMonitoringInstance});
+        }
+        
+        // 更新实例列表的选中状态
+        if (typeof updateInstanceSelection === 'function') {
+            updateInstanceSelection(null);
         }
         
         currentMonitoringInstance = null;

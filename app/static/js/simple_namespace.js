@@ -458,7 +458,21 @@ function updateInstancesList(instances) {
     
     instances.forEach(instance => {
         const instanceDiv = document.createElement('div');
-        instanceDiv.className = 'instance-item mb-2 p-2 border rounded';
+        
+        // 检查是否是当前监控的实例
+        const isCurrentlyMonitoring = (typeof currentMonitoringInstance !== 'undefined' && 
+                                     currentMonitoringInstance === instance.id);
+        
+        // 基础样式类
+        let instanceClasses = 'instance-item mb-2 p-2 border rounded';
+        
+        // 如果是当前监控的实例，添加选中状态样式
+        if (isCurrentlyMonitoring) {
+            instanceClasses += ' instance-selected';
+        }
+        
+        instanceDiv.className = instanceClasses;
+        instanceDiv.setAttribute('data-instance-id', instance.id);
         
         // 根据状态设置不同的样式
         const statusClass = instance.status === 'Attached' ? 'success' : 
@@ -471,10 +485,14 @@ function updateInstancesList(instances) {
                     <span class="badge bg-${statusClass} ms-2">
                         ${instance.status}
                     </span>
+                    ${isCurrentlyMonitoring ? '<span class="badge bg-info ms-1"><i class="fas fa-eye"></i> 监控中</span>' : ''}
                     ${instance.namespace ? '<br><small class="text-muted">ns: ' + instance.namespace + '</small>' : ''}
                 </div>
                 <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-primary" onclick="startMonitoringWithMemory('${instance.id}')" title="监控输出">
+                    <button class="btn ${isCurrentlyMonitoring ? 'btn-primary' : 'btn-outline-primary'}" 
+                            onclick="startMonitoringWithMemory('${instance.id}')" 
+                            title="监控输出"
+                            ${isCurrentlyMonitoring ? 'disabled' : ''}>
                         <i class="fas fa-eye"></i>
                     </button>
                     <button class="btn btn-outline-warning" onclick="stopInstance('${instance.id}')" title="停止实例" ${instance.status === 'Detached' ? 'disabled' : ''}>
@@ -517,6 +535,64 @@ function updateInstancesList(instances) {
         console.log('🔍 [DEBUG] updateInstancesList中的autoRestore返回:', result);
     } else {
         console.log('❌ [DEBUG] 自动恢复条件不满足');
+    }
+}
+
+/**
+ * 更新实例列表中的选中状态
+ * @param {string} selectedInstanceId - 当前选中的实例ID，null表示没有选中
+ */
+function updateInstanceSelection(selectedInstanceId) {
+    console.log('🔄 [DEBUG] 更新实例选中状态:', selectedInstanceId);
+    
+    // 移除所有实例的选中状态
+    const allInstanceItems = document.querySelectorAll('.instance-item');
+    allInstanceItems.forEach(item => {
+        item.classList.remove('instance-selected');
+        
+        // 更新监控按钮状态
+        const monitorBtn = item.querySelector('button[title="监控输出"]');
+        if (monitorBtn) {
+            monitorBtn.classList.remove('btn-primary');
+            monitorBtn.classList.add('btn-outline-primary');
+            monitorBtn.disabled = false;
+        }
+        
+        // 移除监控中标签
+        const monitoringBadge = item.querySelector('.badge.bg-info');
+        if (monitoringBadge) {
+            monitoringBadge.remove();
+        }
+    });
+    
+    // 如果有选中的实例，添加选中状态
+    if (selectedInstanceId) {
+        const selectedItem = document.querySelector(`[data-instance-id="${selectedInstanceId}"]`);
+        if (selectedItem) {
+            selectedItem.classList.add('instance-selected');
+            
+            // 更新监控按钮状态
+            const monitorBtn = selectedItem.querySelector('button[title="监控输出"]');
+            if (monitorBtn) {
+                monitorBtn.classList.remove('btn-outline-primary');
+                monitorBtn.classList.add('btn-primary');
+                monitorBtn.disabled = true;
+            }
+            
+            // 添加监控中标签
+            const badgeContainer = selectedItem.querySelector('div > div:first-child');
+            if (badgeContainer && !badgeContainer.querySelector('.badge.bg-info')) {
+                const monitoringBadge = document.createElement('span');
+                monitoringBadge.className = 'badge bg-info ms-1';
+                monitoringBadge.innerHTML = '<i class="fas fa-eye"></i> 监控中';
+                
+                // 插入到状态标签后面
+                const statusBadge = badgeContainer.querySelector('.badge');
+                if (statusBadge) {
+                    statusBadge.insertAdjacentElement('afterend', monitoringBadge);
+                }
+            }
+        }
     }
 }
 
