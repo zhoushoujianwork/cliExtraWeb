@@ -56,7 +56,7 @@ function sendMessage() {
 // 解析消息中的@提及
 function parseMessage(message) {
     const mentions = [];
-    const atPattern = /@(\w+)/g;
+    const atPattern = /@([^\s]+)/g;  // 修改：匹配@后面直到空格的所有字符
     let match;
     
     while ((match = atPattern.exec(message)) !== null) {
@@ -67,7 +67,7 @@ function parseMessage(message) {
     }
     
     // 移除@提及，得到纯消息内容
-    const cleanMessage = message.replace(/@\w+/g, '').trim();
+    const cleanMessage = message.replace(/@[^\s]+/g, '').trim();  // 同样更新这里的正则
     
     return { mentions, cleanMessage };
 }

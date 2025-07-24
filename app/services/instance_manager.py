@@ -250,6 +250,11 @@ class InstanceManager:
     def _get_instance_status(self, instance: QInstance) -> Dict:
         """获取实例基本状态信息"""
         try:
+            # 首先尝试读取状态文件
+            status_from_file = self._read_status_file(instance.name)
+            if status_from_file:
+                return status_from_file
+            
             # 检查tmux会话是否存在
             session_exists = self._check_tmux_session_exists(instance.session_name)
             
@@ -290,6 +295,49 @@ class InstanceManager:
                 'description': f'状态检查失败: {str(e)}',
                 'last_activity': instance.created_at
             }
+    
+    def _read_status_file(self, instance_name: str) -> Optional[Dict]:
+        """读取实例状态文件"""
+        try:
+            # 尝试从不同namespace查找状态文件
+            possible_paths = [
+                os.path.join(self.work_dir, "namespaces", "q_cli", "status", f"{instance_name}.status"),
+                os.path.join(self.work_dir, "namespaces", "default", "status", f"{instance_name}.status"),
+                os.path.join(self.work_dir, "namespaces", "frontend", "status", f"{instance_name}.status"),
+                os.path.join(self.work_dir, "namespaces", "backend", "status", f"{instance_name}.status"),
+            ]
+            
+            for status_file_path in possible_paths:
+                if os.path.exists(status_file_path):
+                    with open(status_file_path, 'r', encoding='utf-8') as f:
+                        status_data = json.load(f)
+                    
+                    # 转换为前端需要的格式
+                    status_map = {
+                        'idle': {'color': 'green', 'description': '空闲中'},
+                        'busy': {'color': 'yellow', 'description': '处理中'},
+                        'waiting': {'color': 'blue', 'description': '等待输入'},
+                        'error': {'color': 'red', 'description': '执行错误'},
+                        'stopped': {'color': 'gray', 'description': '已停止'}
+                    }
+                    
+                    status = status_data.get('status', 'idle')
+                    status_config = status_map.get(status, status_map['idle'])
+                    
+                    return {
+                        'status': status,
+                        'color': status_config['color'],
+                        'description': status_data.get('task', status_config['description']),
+                        'last_activity': status_data.get('last_activity', status_data.get('timestamp', '')),
+                        'pid': status_data.get('pid'),
+                        'task': status_data.get('task', ''),
+                        'from_file': True
+                    }
+            
+            return None
+        except Exception as e:
+            logger.debug(f"读取实例 {instance_name} 状态文件失败: {e}")
+            return None
     
     def _get_detailed_instance_status(self, instance: QInstance) -> Dict:
         """获取实例详细状态信息"""

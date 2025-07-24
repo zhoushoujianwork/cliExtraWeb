@@ -1,0 +1,36 @@
+/* 快速布局优化 - 解决右下角空白问题 */
+
+/* 扩展右侧聊天面板宽度 */
+.right-panel {
+    width: 420px !important; /* 从300px增加到420px */
+    min-width: 300px !important;
+    max-width: 600px !important;
+}
+
+/* 大屏幕进一步优化 */
+@media (min-width: 1400px) {
+    .right-panel {
+        width: 500px !important;
+    }
+}
+
+@media (min-width: 1600px) {
+    .right-panel {
+        width: 580px !important;
+    }
+}
+
+/* 聊天消息区域充分利用宽度 */
+.message-bubble {
+    max-width: 90% !important; /* 从默认值增加到90% */
+}
+
+/* 聊天输入区域优化 */
+.chat-input-area {
+    padding: 15px !important;
+}
+
+.input-wrapper textarea {
+    border-radius: 20px !important;
+    padding: 12px 16px !important;
+}

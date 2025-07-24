@@ -106,7 +106,16 @@ class InstanceStatusManager {
 
         const statusConfig = this.statusColors[statusInfo.status] || this.statusColors['error'];
         statusIndicator.style.backgroundColor = statusConfig.color;
-        statusIndicator.title = `${statusConfig.text} - ${statusInfo.description}`;
+        
+        // 构建工具提示信息
+        let tooltipText = `${statusConfig.text} - ${statusInfo.description}`;
+        if (statusInfo.task && statusInfo.task !== statusInfo.description) {
+            tooltipText += `\n任务: ${statusInfo.task}`;
+        }
+        if (statusInfo.last_activity) {
+            tooltipText += `\n最后活动: ${statusInfo.last_activity}`;
+        }
+        statusIndicator.title = tooltipText;
         
         // 更新状态文本
         let statusText = row.querySelector('.status-text');
@@ -119,11 +128,24 @@ class InstanceStatusManager {
         statusText.textContent = statusConfig.text;
         statusText.style.color = statusConfig.color;
         
+        // 如果有任务信息，显示任务描述
+        if (statusInfo.task && statusInfo.task !== statusConfig.text) {
+            statusText.textContent = `${statusConfig.text} - ${statusInfo.task.substring(0, 20)}${statusInfo.task.length > 20 ? '...' : ''}`;
+        }
+        
         // 添加状态变化动画
         if (row.dataset.lastStatus !== statusInfo.status) {
             this.animateStatusChange(statusIndicator);
             row.dataset.lastStatus = statusInfo.status;
+            
+            // 显示状态变化通知
+            if (row.dataset.lastStatus) {
+                this.showStatusChangeNotification(row.dataset.instanceName, statusInfo.status, statusConfig.text);
+            }
         }
+        
+        // 更新实例行的状态属性
+        row.setAttribute('data-status', statusInfo.status);
         
         // 存储状态信息用于详情显示
         row.dataset.statusInfo = JSON.stringify(statusInfo);
@@ -377,6 +399,32 @@ class InstanceStatusManager {
     }
 
     /**
+     * 显示状态变化通知
+     */
+    showStatusChangeNotification(instanceName, newStatus, statusText) {
+        // 创建通知元素
+        const notification = document.createElement('div');
+        notification.className = 'status-change-notification';
+        notification.innerHTML = `
+            <div class="alert alert-info alert-dismissible fade show" role="alert">
+                <i class="fas fa-info-circle"></i>
+                实例 <strong>${instanceName}</strong> 状态变更为: <span class="badge bg-primary">${statusText}</span>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        
+        // 添加到页面顶部
+        document.body.insertBefore(notification, document.body.firstChild);
+        
+        // 3秒后自动移除
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 3000);
+    }
+
+    /**
      * 销毁管理器
      */
     destroy() {
@@ -398,6 +446,11 @@ class InstanceStatusManager {
         if (filterContainer) {
             filterContainer.remove();
         }
+        
+        // 移除通知
+        document.querySelectorAll('.status-change-notification').forEach(notification => {
+            notification.remove();
+        });
     }
 }
 

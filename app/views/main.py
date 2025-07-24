@@ -25,6 +25,11 @@ def index():
                          chat_history=chat_history,
                          current_namespace=namespace)
 
+@bp.route('/terminal-scroll-demo')
+def terminal_scroll_demo():
+    """终端滚动加载功能演示页面"""
+    return render_template('terminal_scroll_demo.html')
+
 @bp.route('/roles')
 def roles():
     """角色管理页面"""

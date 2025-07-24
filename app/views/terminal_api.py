@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Terminal API for cliExtra log file streaming
+Terminal API for cliExtra log file streaming with scroll loading
 """
 import subprocess
 import threading
@@ -18,6 +18,61 @@ active_tail_processes = {}
 
 # cliExtra日志目录
 CLIEXTRA_LOG_BASE = os.path.expanduser("~/Library/Application Support/cliExtra/namespaces")
+
+@bp.route('/api/terminal/output/<instance_id>')
+def get_terminal_output(instance_id):
+    """获取终端输出，支持分页和滚动加载"""
+    try:
+        # 获取查询参数
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('page_size', 100))
+        direction = request.args.get('direction', 'forward')  # forward/backward
+        from_line = int(request.args.get('from_line', 0))
+        
+        from app.services.instance_manager import InstanceManager
+        manager = InstanceManager()
+        
+        # 获取完整的输出历史
+        result = manager.get_terminal_output_with_pagination(
+            instance_id, page, page_size, direction, from_line
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/api/terminal/history/<instance_id>')
+def get_terminal_history(instance_id):
+    """获取终端历史记录统计信息"""
+    try:
+        from app.services.instance_manager import InstanceManager
+        manager = InstanceManager()
+        
+        result = manager.get_terminal_history_info(instance_id)
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/api/terminal/search/<instance_id>')
+def search_terminal_output(instance_id):
+    """搜索终端输出内容"""
+    try:
+        query = request.args.get('q', '')
+        max_results = int(request.args.get('max_results', 50))
+        
+        if not query:
+            return jsonify({'error': 'Search query is required'}), 400
+            
+        from app.services.instance_manager import InstanceManager
+        manager = InstanceManager()
+        
+        result = manager.search_terminal_output(instance_id, query, max_results)
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @bp.route('/api/terminal/start_tail/<instance_id>')
 def start_tail(instance_id):

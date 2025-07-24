@@ -587,7 +587,7 @@ def get_attach_info(instance_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @bp.route('/status/<instance_id>', methods=['GET'])
-def get_instance_status(instance_id):
+def get_instance_details(instance_id):
     """获取实例详细状态"""
     try:
         result = instance_manager.get_instance_status(instance_id)
@@ -1395,7 +1395,7 @@ def delete_namespace(namespace_name):
         }), 500
 
 @bp.route('/instances/<instance_id>/details', methods=['GET'])
-def get_instance_details(instance_id):
+def get_instance_info(instance_id):
     """获取实例详情"""
     try:
         # 获取实例基本信息
