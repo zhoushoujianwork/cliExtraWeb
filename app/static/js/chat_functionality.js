@@ -24,10 +24,10 @@ function sendMessage() {
     // 保存消息到历史记录
     saveMessageToHistory(message);
     
-    // 解析@提及
-    const { mentions, cleanMessage } = parseMessage(message);
+    // 解析消息发送目标
+    const { target, content, type } = parseMessageTarget(message);
     
-    console.log('发送消息:', { message, mentions, cleanMessage });
+    console.log('发送消息:', { message, target, content, type });
     
     // 显示用户消息
     const timestamp = new Date().toLocaleTimeString();
@@ -36,48 +36,151 @@ function sendMessage() {
     // 清空输入框并重置高度
     messageInput.value = '';
     messageInput.style.height = 'auto';
-    messageInput.style.height = '40px'; // 更新为新的最小高度
+    messageInput.style.height = '40px';
     
     // 更新工具栏按钮状态
     updateToolbarButtonStates();
     
-    // 根据是否有@来决定发送方式
-    if (mentions.length > 0) {
-        // 有@实例，发送给指定实例
-        console.log('发送给指定实例:', mentions);
-        sendToSpecificInstances(mentions, cleanMessage || '');
-    } else {
-        // 没有@，广播给所有实例
-        console.log('广播消息');
-        broadcastToAllInstances(message);
+    // 根据解析结果发送消息
+    switch (type) {
+        case 'broadcast':
+            console.log('广播消息到当前namespace');
+            broadcastToCurrentNamespace(content);
+            break;
+        case 'specific':
+            console.log('发送给指定实例:', target);
+            sendToSpecificInstance(target, content);
+            break;
+        case 'system':
+        default:
+            console.log('发送给system实例:', target);
+            sendToSystemInstance(target, content);
+            break;
     }
 }
 
-// 解析消息中的@提及
-function parseMessage(message) {
-    const mentions = [];
-    const atPattern = /@([^\s]+)/g;  // 修改：匹配@后面直到空格的所有字符
-    let match;
-    
-    while ((match = atPattern.exec(message)) !== null) {
-        const instanceId = match[1];
-        if (!mentions.includes(instanceId)) {
-            mentions.push(instanceId);
-        }
+// 解析消息发送目标 - 新逻辑
+function parseMessageTarget(message) {
+    // 检查是否以@all开头 - 广播
+    if (message.startsWith('@all')) {
+        const content = message.substring(4).trim(); // 移除@all
+        return {
+            target: 'all',
+            content: content || message, // 如果没有内容，使用原消息
+            type: 'broadcast'
+        };
     }
     
-    // 移除@提及，得到纯消息内容
-    const cleanMessage = message.replace(/@[^\s]+/g, '').trim();  // 同样更新这里的正则
+    // 检查是否以@开头 - 指定实例
+    const atMatch = message.match(/^@([^\s]+)\s*(.*)/);
+    if (atMatch) {
+        const instanceId = atMatch[1];
+        const content = atMatch[2].trim() || message; // 如果没有内容，使用原消息
+        return {
+            target: instanceId,
+            content: content,
+            type: 'specific'
+        };
+    }
     
-    return { mentions, cleanMessage };
+    // 没有@前缀 - 发送给system实例
+    const currentNamespace = getCurrentNamespace() || 'q_cli';
+    const systemTarget = `${currentNamespace}_system`;
+    return {
+        target: systemTarget,
+        content: message,
+        type: 'system'
+    };
+}
+
+// 广播到当前namespace
+async function broadcastToCurrentNamespace(message) {
+    const currentNamespace = getCurrentNamespace() || 'q_cli';
+    
+    try {
+        const response = await fetch('/api/broadcast', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: message,
+                namespace: currentNamespace
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('广播消息成功:', result);
+            showNotification(`消息已广播到 ${currentNamespace} namespace`, 'success');
+        } else {
+            console.error('广播消息失败:', result.error);
+            showNotification(`广播失败: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('广播消息异常:', error);
+        showNotification('广播消息失败', 'error');
+    }
 }
 
 // 发送给指定实例
-async function sendToSpecificInstances(instanceIds, message) {
-    console.log('开始发送给指定实例:', instanceIds, message);
-    
-    for (const instanceId of instanceIds) {
-        try {
+async function sendToSpecificInstance(instanceId, message) {
+    try {
+        const response = await fetch('/api/send-message', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                target_instance: instanceId,
+                message: message
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('发送消息成功:', result);
+            showNotification(`消息已发送给 ${instanceId}`, 'success');
+        } else {
+            console.error('发送消息失败:', result.error);
+            showNotification(`发送失败: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('发送消息异常:', error);
+        showNotification('发送消息失败', 'error');
+    }
+}
+
+// 发送给system实例
+async function sendToSystemInstance(systemTarget, message) {
+    try {
+        const response = await fetch('/api/send-message', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                target_instance: systemTarget,
+                message: message
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('发送给system实例成功:', result);
+            showNotification(`消息已发送给 ${systemTarget}`, 'success');
+        } else {
+            console.error('发送给system实例失败:', result.error);
+            showNotification(`发送失败: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('发送给system实例异常:', error);
+        showNotification('发送消息失败', 'error');
+    }
+}
             console.log(`发送消息给实例 ${instanceId}:`, message);
             
             const response = await fetch('/api/send', {
@@ -1289,3 +1392,38 @@ function showNotification(message, type = 'info', duration = 3000) {
         }, 300);
     }, duration);
 }
+
+// 更新输入框提示
+function updateInputPlaceholder() {
+    const messageInput = document.getElementById('messageInput');
+    if (!messageInput) return;
+    
+    const currentNamespace = getCurrentNamespace() || 'q_cli';
+    const systemTarget = `${currentNamespace}_system`;
+    
+    messageInput.placeholder = `输入消息 (默认发送给 ${systemTarget}，@all 广播，@实例名 指定发送)`;
+}
+
+// 在页面加载和namespace切换时更新提示
+document.addEventListener('DOMContentLoaded', function() {
+    updateInputPlaceholder();
+    
+    // 监听namespace变化
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList' || mutation.type === 'characterData') {
+                updateInputPlaceholder();
+            }
+        });
+    });
+    
+    // 观察namespace显示元素的变化
+    const namespaceElement = document.querySelector('.current-namespace, #currentNamespace');
+    if (namespaceElement) {
+        observer.observe(namespaceElement, {
+            childList: true,
+            characterData: true,
+            subtree: true
+        });
+    }
+});

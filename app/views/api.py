@@ -325,6 +325,39 @@ def send_message():
         chat_manager.add_system_log(error_msg)
         return jsonify({'success': False, 'error': error_msg}), 500
 
+@bp.route('/send-message', methods=['POST'])
+def send_message_new():
+    """新的消息发送API - 支持指定实例和system实例"""
+    try:
+        data = request.get_json()
+        target_instance = data.get('target_instance', '').strip()
+        message = data.get('message', '').strip()
+        
+        if not target_instance or not message:
+            return jsonify({'success': False, 'error': '缺少目标实例或消息内容'}), 400
+        
+        logger.info(f"📤 发送消息到实例 {target_instance}: {message}")
+        
+        result = instance_manager.send_message(target_instance, message)
+        
+        if result['success']:
+            logger.info(f"✅ 消息发送成功到 {target_instance}")
+            return jsonify({
+                'success': True,
+                'message': f'消息已发送给 {target_instance}',
+                'target': target_instance
+            })
+        else:
+            logger.error(f"❌ 消息发送失败到 {target_instance}: {result.get('error', 'Unknown error')}")
+            return jsonify({
+                'success': False, 
+                'error': result.get('error', '发送失败')
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"发送消息异常: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @bp.route('/clean', methods=['POST'])
 def clean_all():
     """清理所有实例"""
