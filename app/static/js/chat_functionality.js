@@ -150,7 +150,7 @@ function addUserMessage(message, timestamp) {
         <div class="message-layout user-layout">
             <div class="message-avatar user-avatar">
                 <div class="avatar-container">
-                    <span class="avatar-emoji">👤</span>
+                    <img src="/static/images/user-avatar.svg" alt="用户" class="avatar-svg">
                 </div>
             </div>
             <div class="message-content-area">
@@ -198,8 +198,8 @@ function addInstanceMessage(instanceId, message, timestamp) {
     const chatMessages = document.getElementById('chatMessages');
     if (!chatMessages) return;
     
-    // 根据实例ID生成不同的头像
-    const avatarEmoji = getInstanceAvatar(instanceId);
+    // 根据实例状态获取头像
+    const avatarSrc = getInstanceAvatarSvg(instanceId);
     
     const messageDiv = document.createElement('div');
     messageDiv.className = 'wechat-message-item';
@@ -207,7 +207,7 @@ function addInstanceMessage(instanceId, message, timestamp) {
         <div class="message-layout assistant-layout">
             <div class="message-avatar assistant-avatar">
                 <div class="avatar-container">
-                    <span class="avatar-emoji">${avatarEmoji}</span>
+                    <img src="${avatarSrc}" alt="${escapeHtml(instanceId)}" class="avatar-svg">
                 </div>
             </div>
             <div class="message-content-area">
@@ -355,6 +355,8 @@ function updateAvailableInstances(instances) {
     }
     
     availableInstances = filteredInstances;
+    // 确保全局可访问
+    window.availableInstances = availableInstances;
     console.log('更新可用实例列表 (当前namespace:', currentNs, '):', availableInstances);
 }
 
@@ -545,7 +547,33 @@ function waitForNamespaceInit() {
     });
 }
 
-// 根据实例ID生成头像
+// 获取实例状态
+function getInstanceStatus(instanceId) {
+    // 从全局实例列表中获取状态
+    if (window.availableInstances && Array.isArray(window.availableInstances)) {
+        const instance = window.availableInstances.find(inst => inst.id === instanceId);
+        if (instance) {
+            return instance.status;
+        }
+    }
+    
+    // 如果找不到实例信息，默认为离线状态
+    return 'Detached';
+}
+
+// 根据实例状态获取SVG头像
+function getInstanceAvatarSvg(instanceId) {
+    const status = getInstanceStatus(instanceId);
+    
+    // 根据状态返回不同的头像
+    if (status === 'Attached') {
+        return '/static/images/ai-avatar-online.svg';
+    } else {
+        return '/static/images/ai-avatar-offline.svg';
+    }
+}
+
+// 根据实例ID生成头像 (保留原有函数以兼容)
 function getInstanceAvatar(instanceId) {
     const avatars = ['🤖', '🎯', '💡', '⚡', '🔥', '🌟', '🎨', '🔧', '📊', '🚀'];
     const hash = instanceId.split('').reduce((a, b) => {

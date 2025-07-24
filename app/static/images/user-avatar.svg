@@ -1,0 +1,16 @@
+<svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景圆形 -->
+  <circle cx="22" cy="22" r="22" fill="url(#userGradient)"/>
+  
+  <!-- 用户图标 -->
+  <path d="M22 12C18.6863 12 16 14.6863 16 18C16 21.3137 18.6863 24 22 24C25.3137 24 28 21.3137 28 18C28 14.6863 25.3137 12 22 12Z" fill="white" fill-opacity="0.9"/>
+  <path d="M12 32C12 26.4772 16.4772 22 22 22C27.5228 22 32 26.4772 32 32V34H12V32Z" fill="white" fill-opacity="0.9"/>
+  
+  <!-- 渐变定义 -->
+  <defs>
+    <linearGradient id="userGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4facfe;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00f2fe;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+</svg>
