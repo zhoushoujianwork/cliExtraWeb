@@ -825,6 +825,37 @@
         </div>
     </div>
 </div>
+
+<!-- 实例详情模态框 -->
+<div class="modal fade" id="instanceDetailsModal" tabindex="-1" aria-labelledby="instanceDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="instanceDetailsModalLabel">
+                    <i class="fas fa-info-circle"></i> 实例详情
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="instanceDetailsContent">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-2">正在加载实例详情...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary" id="saveInstanceDetailsBtn" onclick="saveInstanceDetails()" style="display: none;">
+                    <i class="fas fa-save"></i> 保存修改
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="deleteNamespaceModal" tabindex="-1" aria-labelledby="deleteNamespaceModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">

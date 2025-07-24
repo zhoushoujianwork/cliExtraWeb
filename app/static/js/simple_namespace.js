@@ -478,12 +478,6 @@ function updateInstancesList(instances) {
         const statusClass = instance.status === 'Attached' ? 'success' : 
                            instance.status === 'Detached' ? 'warning' : 'secondary';
         
-        // 根据实例状态确定停止按钮的样式和状态
-        const isDetached = instance.status === 'Detached';
-        const stopButtonClass = isDetached ? 'btn-secondary' : 'btn-outline-warning';
-        const stopButtonDisabled = isDetached ? 'disabled' : '';
-        const stopButtonTitle = isDetached ? '实例已停止' : '停止实例';
-        
         instanceDiv.innerHTML = `
             <div class="d-flex justify-content-between align-items-center">
                 <div>
@@ -501,11 +495,10 @@ function updateInstancesList(instances) {
                             ${isCurrentlyMonitoring ? 'disabled' : ''}>
                         <i class="fas fa-eye"></i>
                     </button>
-                    <button class="btn ${stopButtonClass}" 
-                            onclick="stopInstance('${instance.id}')" 
-                            title="${stopButtonTitle}" 
-                            ${stopButtonDisabled}>
-                        <i class="fas fa-stop"></i>
+                    <button class="btn btn-outline-info" 
+                            onclick="showInstanceDetails('${instance.id}')" 
+                            title="查看实例详情">
+                        <i class="fas fa-info-circle"></i>
                     </button>
                     <button class="btn btn-outline-danger" onclick="cleanInstance('${instance.id}')" title="清理实例数据">
                         <i class="fas fa-trash"></i>
@@ -692,6 +685,325 @@ function autoRestoreNamespaceInstance(namespace) {
         console.log('🔍 [DEBUG] autoRestoreTerminalSelection 返回:', result);
     } else {
         console.log('⚠️ 当前namespace没有可用实例:', namespace);
+    }
+}
+
+/**
+ * 显示实例详情
+ */
+function showInstanceDetails(instanceId) {
+    console.log('🔍 显示实例详情:', instanceId);
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('instanceDetailsModal'));
+    modal.show();
+    
+    // 重置内容为加载状态
+    const contentDiv = document.getElementById('instanceDetailsContent');
+    contentDiv.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+            <p class="mt-2">正在加载实例详情...</p>
+        </div>
+    `;
+    
+    // 隐藏保存按钮
+    document.getElementById('saveInstanceDetailsBtn').style.display = 'none';
+    
+    // 获取实例详情
+    fetch(`/api/instances/${instanceId}/details`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderInstanceDetails(data.instance);
+            } else {
+                showInstanceDetailsError(data.error || '获取实例详情失败');
+            }
+        })
+        .catch(error => {
+            console.error('获取实例详情失败:', error);
+            showInstanceDetailsError('网络错误，请稍后重试');
+        });
+}
+
+/**
+ * 渲染实例详情内容
+ */
+function renderInstanceDetails(instance) {
+    const contentDiv = document.getElementById('instanceDetailsContent');
+    
+    // 更新模态框标题
+    document.getElementById('instanceDetailsModalLabel').innerHTML = `
+        <i class="fas fa-info-circle"></i> 实例详情 - ${instance.id}
+    `;
+    
+    // 渲染详情内容
+    contentDiv.innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-server"></i> 基本信息</h6>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <td><strong>实例ID:</strong></td>
+                                <td>${instance.id}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>状态:</strong></td>
+                                <td>
+                                    <span class="badge bg-${instance.status === 'Attached' ? 'success' : 'warning'}">
+                                        ${instance.status}
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>命名空间:</strong></td>
+                                <td>${instance.namespace || 'default'}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>角色:</strong></td>
+                                <td>${instance.role || '未设置'}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>项目路径:</strong></td>
+                                <td><small class="text-muted">${instance.project_path || '未设置'}</small></td>
+                            </tr>
+                            <tr>
+                                <td><strong>创建时间:</strong></td>
+                                <td><small class="text-muted">${instance.created_at || '未知'}</small></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="fas fa-tools"></i> 工具配置</h6>
+                        <button class="btn btn-sm btn-outline-primary" onclick="editInstanceTools('${instance.id}')">
+                            <i class="fas fa-edit"></i> 编辑
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="instanceToolsList">
+                            ${renderToolsList(instance.tools || [])}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-chart-line"></i> 运行统计</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <div class="border rounded p-2">
+                                    <div class="h5 mb-0 text-primary">${instance.stats?.uptime || '0'}</div>
+                                    <small class="text-muted">运行时长</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="border rounded p-2">
+                                    <div class="h5 mb-0 text-success">${instance.stats?.messages || '0'}</div>
+                                    <small class="text-muted">消息数量</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="border rounded p-2">
+                                    <div class="h5 mb-0 text-warning">${instance.stats?.memory || '0MB'}</div>
+                                    <small class="text-muted">内存使用</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="border rounded p-2">
+                                    <div class="h5 mb-0 text-info">${instance.stats?.cpu || '0%'}</div>
+                                    <small class="text-muted">CPU使用</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * 渲染工具列表
+ */
+function renderToolsList(tools) {
+    if (!tools || tools.length === 0) {
+        return '<p class="text-muted mb-0">未安装任何工具</p>';
+    }
+    
+    return tools.map(tool => `
+        <span class="badge bg-secondary me-1 mb-1">${tool}</span>
+    `).join('');
+}
+
+/**
+ * 显示实例详情错误
+ */
+function showInstanceDetailsError(error) {
+    const contentDiv = document.getElementById('instanceDetailsContent');
+    contentDiv.innerHTML = `
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i>
+            <strong>加载失败:</strong> ${error}
+        </div>
+        <div class="text-center">
+            <button class="btn btn-outline-primary" onclick="location.reload()">
+                <i class="fas fa-refresh"></i> 刷新页面
+            </button>
+        </div>
+    `;
+}
+
+/**
+ * 编辑实例工具
+ */
+function editInstanceTools(instanceId) {
+    console.log('🔧 编辑实例工具:', instanceId);
+    
+    // 获取当前工具列表
+    const currentInstance = allInstances.find(inst => inst.id === instanceId);
+    const currentTools = currentInstance?.tools || [];
+    
+    // 显示工具编辑界面
+    const toolsListDiv = document.getElementById('instanceToolsList');
+    toolsListDiv.innerHTML = `
+        <div class="mb-3">
+            <label class="form-label">选择工具:</label>
+            <div id="toolsCheckboxes">
+                ${renderToolsCheckboxes(currentTools)}
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-success btn-sm" onclick="saveInstanceTools('${instanceId}')">
+                <i class="fas fa-save"></i> 保存
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelEditTools('${instanceId}')">
+                <i class="fas fa-times"></i> 取消
+            </button>
+        </div>
+    `;
+    
+    // 显示保存按钮
+    document.getElementById('saveInstanceDetailsBtn').style.display = 'inline-block';
+}
+
+/**
+ * 渲染工具复选框
+ */
+function renderToolsCheckboxes(currentTools) {
+    const availableTools = [
+        'git', 'docker', 'kubectl', 'terraform', 'ansible', 
+        'jenkins', 'prometheus', 'grafana', 'elasticsearch', 'redis'
+    ];
+    
+    return availableTools.map(tool => `
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" id="tool_${tool}" value="${tool}" 
+                   ${currentTools.includes(tool) ? 'checked' : ''}>
+            <label class="form-check-label" for="tool_${tool}">${tool}</label>
+        </div>
+    `).join('');
+}
+
+/**
+ * 保存实例工具配置
+ */
+function saveInstanceTools(instanceId) {
+    console.log('💾 保存实例工具配置:', instanceId);
+    
+    // 获取选中的工具
+    const selectedTools = [];
+    document.querySelectorAll('#toolsCheckboxes input[type="checkbox"]:checked').forEach(checkbox => {
+        selectedTools.push(checkbox.value);
+    });
+    
+    // 发送保存请求
+    fetch(`/api/instances/${instanceId}/tools`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            tools: selectedTools
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 更新显示
+            const toolsListDiv = document.getElementById('instanceToolsList');
+            toolsListDiv.innerHTML = renderToolsList(selectedTools);
+            
+            // 更新本地缓存
+            const instance = allInstances.find(inst => inst.id === instanceId);
+            if (instance) {
+                instance.tools = selectedTools;
+            }
+            
+            // 显示成功消息
+            if (typeof showNotification === 'function') {
+                showNotification('工具配置已保存', 'success');
+            }
+            
+            // 隐藏保存按钮
+            document.getElementById('saveInstanceDetailsBtn').style.display = 'none';
+        } else {
+            if (typeof showNotification === 'function') {
+                showNotification(`保存失败: ${data.error}`, 'error');
+            }
+        }
+    })
+    .catch(error => {
+        console.error('保存工具配置失败:', error);
+        if (typeof showNotification === 'function') {
+            showNotification('保存失败，请稍后重试', 'error');
+        }
+    });
+}
+
+/**
+ * 取消编辑工具
+ */
+function cancelEditTools(instanceId) {
+    const currentInstance = allInstances.find(inst => inst.id === instanceId);
+    const currentTools = currentInstance?.tools || [];
+    
+    // 恢复显示
+    const toolsListDiv = document.getElementById('instanceToolsList');
+    toolsListDiv.innerHTML = renderToolsList(currentTools);
+    
+    // 隐藏保存按钮
+    document.getElementById('saveInstanceDetailsBtn').style.display = 'none';
+}
+
+/**
+ * 保存实例详情（从模态框底部按钮调用）
+ */
+function saveInstanceDetails() {
+    // 这个函数可以用于保存其他可能的修改
+    console.log('💾 保存实例详情');
+    
+    // 隐藏保存按钮
+    document.getElementById('saveInstanceDetailsBtn').style.display = 'none';
+    
+    if (typeof showNotification === 'function') {
+        showNotification('修改已保存', 'success');
     }
 }
 

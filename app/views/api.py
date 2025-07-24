@@ -1378,3 +1378,116 @@ def delete_namespace(namespace_name):
             'success': False,
             'error': str(e)
         }), 500
+
+@bp.route('/instances/<instance_id>/details', methods=['GET'])
+def get_instance_details(instance_id):
+    """获取实例详情"""
+    try:
+        # 获取实例基本信息
+        instances = instance_manager.list_instances()
+        instance = None
+        
+        for inst in instances:
+            if inst.get('id') == instance_id:
+                instance = inst
+                break
+        
+        if not instance:
+            return jsonify({
+                'success': False,
+                'error': f'实例 {instance_id} 不存在'
+            }), 404
+        
+        # 获取详细信息
+        instance_details = {
+            'id': instance.get('id'),
+            'status': instance.get('status'),
+            'namespace': instance.get('namespace', 'default'),
+            'role': instance.get('role'),
+            'project_path': instance.get('project_path'),
+            'created_at': instance.get('created_at'),
+            'tools': instance.get('tools', []),
+            'stats': {
+                'uptime': instance.get('uptime', '0分钟'),
+                'messages': instance.get('message_count', 0),
+                'memory': instance.get('memory_usage', '0MB'),
+                'cpu': instance.get('cpu_usage', '0%')
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'instance': instance_details
+        })
+        
+    except Exception as e:
+        logger.error(f"获取实例详情失败: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@bp.route('/instances/<instance_id>/tools', methods=['PUT'])
+def update_instance_tools(instance_id):
+    """更新实例工具配置"""
+    try:
+        data = request.get_json() or {}
+        tools = data.get('tools', [])
+        
+        if not isinstance(tools, list):
+            return jsonify({
+                'success': False,
+                'error': '工具列表必须是数组格式'
+            }), 400
+        
+        # 验证工具名称
+        valid_tools = [
+            'git', 'docker', 'kubectl', 'terraform', 'ansible',
+            'jenkins', 'prometheus', 'grafana', 'elasticsearch', 'redis'
+        ]
+        
+        invalid_tools = [tool for tool in tools if tool not in valid_tools]
+        if invalid_tools:
+            return jsonify({
+                'success': False,
+                'error': f'无效的工具: {", ".join(invalid_tools)}'
+            }), 400
+        
+        # 检查实例是否存在
+        instances = instance_manager.list_instances()
+        instance = None
+        
+        for inst in instances:
+            if inst.get('id') == instance_id:
+                instance = inst
+                break
+        
+        if not instance:
+            return jsonify({
+                'success': False,
+                'error': f'实例 {instance_id} 不存在'
+            }), 404
+        
+        # 更新工具配置
+        result = instance_manager.update_instance_tools(instance_id, tools)
+        
+        if result.get('success'):
+            chat_manager.add_system_log(f'实例 {instance_id} 工具配置已更新: {", ".join(tools)}')
+            
+            return jsonify({
+                'success': True,
+                'message': '工具配置更新成功',
+                'tools': tools
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', '更新工具配置失败')
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"更新实例工具配置失败: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
