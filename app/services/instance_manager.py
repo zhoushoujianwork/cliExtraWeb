@@ -282,7 +282,7 @@ class InstanceManager:
             }
     
     def _read_status_file(self, instance_name: str) -> Optional[Dict]:
-        """读取实例状态文件 - 简化版，只关注idle/busy"""
+        """读取实例状态文件 - 简化版，只读取0/1数字"""
         try:
             # 尝试从不同namespace查找状态文件
             possible_paths = [
@@ -290,34 +290,60 @@ class InstanceManager:
                 os.path.join(self.work_dir, "namespaces", "default", "status", f"{instance_name}.status"),
                 os.path.join(self.work_dir, "namespaces", "frontend", "status", f"{instance_name}.status"),
                 os.path.join(self.work_dir, "namespaces", "backend", "status", f"{instance_name}.status"),
+                os.path.join(self.work_dir, "namespaces", "box", "status", f"{instance_name}.status"),
             ]
             
             for status_file_path in possible_paths:
                 if os.path.exists(status_file_path):
-                    with open(status_file_path, 'r', encoding='utf-8') as f:
-                        status_data = json.load(f)
-                    
-                    # 只关注idle和busy状态
-                    status = status_data.get('status', 'idle')
-                    if status not in ['idle', 'busy']:
-                        status = 'idle'  # 其他状态都当作idle
-                    
-                    color = 'green' if status == 'idle' else 'orange'
-                    description = '空闲中' if status == 'idle' else '忙碌中'
-                    
-                    return {
-                        'status': status,
-                        'color': color,
-                        'description': description,
-                        'last_activity': status_data.get('last_activity', status_data.get('timestamp', '')),
-                        'task': status_data.get('task', ''),
-                        'from_file': True
-                    }
+                    try:
+                        with open(status_file_path, 'r', encoding='utf-8') as f:
+                            content = f.read().strip()
+                        
+                        # 解析简化的状态格式：0=idle, 1=busy
+                        if content == '0':
+                            status = 'idle'
+                            color = 'green'
+                            description = '空闲中'
+                        elif content == '1':
+                            status = 'busy'
+                            color = 'orange'
+                            description = '忙碌中'
+                        else:
+                            # 如果不是0或1，默认为idle
+                            logger.warning(f"状态文件 {status_file_path} 内容异常: '{content}', 默认为idle")
+                            status = 'idle'
+                            color = 'green'
+                            description = '空闲中'
+                        
+                        logger.debug(f"读取状态文件 {status_file_path}: {content} -> {status}")
+                        
+                        return {
+                            'status': status,
+                            'color': color,
+                            'description': description,
+                            'last_activity': self._get_file_mtime(status_file_path),
+                            'from_file': True,
+                            'file_path': status_file_path,
+                            'raw_content': content
+                        }
+                        
+                    except Exception as e:
+                        logger.error(f"读取状态文件 {status_file_path} 失败: {e}")
+                        continue
             
             return None
         except Exception as e:
-            logger.debug(f"读取实例 {instance_name} 状态文件失败: {e}")
+            logger.debug(f"查找实例 {instance_name} 状态文件失败: {e}")
             return None
+    
+    def _get_file_mtime(self, file_path: str) -> str:
+        """获取文件修改时间"""
+        try:
+            import datetime
+            mtime = os.path.getmtime(file_path)
+            return datetime.datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+        except Exception:
+            return ''
     
     def _get_detailed_instance_status(self, instance: QInstance) -> Dict:
         """获取实例详细状态信息"""

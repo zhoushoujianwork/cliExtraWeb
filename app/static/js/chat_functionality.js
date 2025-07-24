@@ -192,31 +192,6 @@ async function sendToSystemInstance(systemTarget, message) {
         showNotification('发送消息失败', 'error');
     }
 }
-            console.log(`发送消息给实例 ${instanceId}:`, message);
-            
-            const response = await fetch('/api/send', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    instance_id: instanceId,
-                    message: message,
-                    namespace: getCurrentNamespace() || 'default'
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                console.log(`✅ 消息发送成功给实例 ${instanceId}`);
-                addSystemMessage(`消息已发送给实例 ${instanceId}`);
-            } else {
-                console.error(`❌ 发送失败给实例 ${instanceId}:`, result.error);
-                addSystemMessage(`发送失败给实例 ${instanceId}: ${result.error}`);
-            }
-        }
-}
 
 // 广播给所有实例
 async function broadcastToAllInstances(message) {

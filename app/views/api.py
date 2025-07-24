@@ -388,6 +388,41 @@ def send_message_new():
         logger.error(f"发送消息异常: {e}")
         return jsonify({'success': False, 'error': '服务器内部错误'}), 500
 
+@bp.route('/test-status', methods=['GET'])
+def test_status_reading():
+    """测试状态文件读取 - 用于验证新格式"""
+    try:
+        # 获取所有实例状态
+        status_info = instance_manager.get_instances_status()
+        
+        # 详细的状态信息
+        detailed_info = {}
+        for instance_id, status in status_info.items():
+            detailed_info[instance_id] = {
+                'status': status.get('status', 'unknown'),
+                'color': status.get('color', 'gray'),
+                'description': status.get('description', '未知'),
+                'from_file': status.get('from_file', False),
+                'file_path': status.get('file_path', ''),
+                'raw_content': status.get('raw_content', ''),
+                'last_activity': status.get('last_activity', '')
+            }
+        
+        return jsonify({
+            'success': True,
+            'total_instances': len(detailed_info),
+            'status_summary': {
+                'idle': len([s for s in status_info.values() if s.get('status') == 'idle']),
+                'busy': len([s for s in status_info.values() if s.get('status') == 'busy']),
+                'other': len([s for s in status_info.values() if s.get('status') not in ['idle', 'busy']])
+            },
+            'detailed_status': detailed_info
+        })
+        
+    except Exception as e:
+        logger.error(f"测试状态读取失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @bp.route('/clean', methods=['POST'])
 def clean_all():
     """清理所有实例"""
