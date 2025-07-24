@@ -258,56 +258,31 @@ class InstanceManager:
             return {'error': str(e)}
     
     def _get_instance_status(self, instance: QInstance) -> Dict:
-        """获取实例基本状态信息"""
+        """获取实例基本状态信息 - 简化版，只关注状态文件"""
         try:
-            # 首先尝试读取状态文件
+            # 只读取状态文件，不检查tmux会话
             status_from_file = self._read_status_file(instance.name)
             if status_from_file:
                 return status_from_file
             
-            # 检查tmux会话是否存在
-            session_exists = self._check_tmux_session_exists(instance.session_name)
-            
-            if not session_exists:
-                return {
-                    'status': 'stopped',
-                    'color': 'gray',
-                    'description': '已停止',
-                    'last_activity': instance.created_at
-                }
-            
-            # 检查进程状态
-            pid = self._get_session_pid(instance.session_name)
-            if not pid:
-                return {
-                    'status': 'error',
-                    'color': 'red',
-                    'description': '进程异常',
-                    'last_activity': instance.created_at
-                }
-            
-            # 分析最近的输出来判断状态
-            recent_output = self._get_recent_session_output(instance.session_name)
-            status = self._analyze_instance_status(recent_output)
-            
+            # 如果没有状态文件，默认为idle
             return {
-                'status': status['status'],
-                'color': status['color'],
-                'description': status['description'],
-                'last_activity': self._get_last_activity_time(instance.session_name),
-                'pid': pid
+                'status': 'idle',
+                'color': 'green',
+                'description': '空闲中',
+                'last_activity': instance.created_at if hasattr(instance, 'created_at') else ''
             }
         except Exception as e:
             logger.error(f"获取实例 {instance.name} 状态失败: {e}")
             return {
-                'status': 'error',
-                'color': 'red',
-                'description': f'状态检查失败: {str(e)}',
-                'last_activity': instance.created_at
+                'status': 'idle',
+                'color': 'green', 
+                'description': '空闲中',
+                'last_activity': instance.created_at if hasattr(instance, 'created_at') else ''
             }
     
     def _read_status_file(self, instance_name: str) -> Optional[Dict]:
-        """读取实例状态文件"""
+        """读取实例状态文件 - 简化版，只关注idle/busy"""
         try:
             # 尝试从不同namespace查找状态文件
             possible_paths = [
@@ -322,24 +297,19 @@ class InstanceManager:
                     with open(status_file_path, 'r', encoding='utf-8') as f:
                         status_data = json.load(f)
                     
-                    # 转换为前端需要的格式
-                    status_map = {
-                        'idle': {'color': 'green', 'description': '空闲中'},
-                        'busy': {'color': 'yellow', 'description': '处理中'},
-                        'waiting': {'color': 'blue', 'description': '等待输入'},
-                        'error': {'color': 'red', 'description': '执行错误'},
-                        'stopped': {'color': 'gray', 'description': '已停止'}
-                    }
-                    
+                    # 只关注idle和busy状态
                     status = status_data.get('status', 'idle')
-                    status_config = status_map.get(status, status_map['idle'])
+                    if status not in ['idle', 'busy']:
+                        status = 'idle'  # 其他状态都当作idle
+                    
+                    color = 'green' if status == 'idle' else 'orange'
+                    description = '空闲中' if status == 'idle' else '忙碌中'
                     
                     return {
                         'status': status,
-                        'color': status_config['color'],
-                        'description': status_data.get('task', status_config['description']),
+                        'color': color,
+                        'description': description,
                         'last_activity': status_data.get('last_activity', status_data.get('timestamp', '')),
-                        'pid': status_data.get('pid'),
                         'task': status_data.get('task', ''),
                         'from_file': True
                     }
