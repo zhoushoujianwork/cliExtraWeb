@@ -76,9 +76,9 @@ class InstanceStatusManager {
      * 更新状态显示
      */
     updateStatusDisplay() {
-        document.querySelectorAll('.instance-row').forEach(row => {
-            const instanceName = row.dataset.instanceName;
-            const statusInfo = this.statusCache[instanceName];
+        document.querySelectorAll('.instance-item').forEach(row => {
+            const instanceId = row.dataset.instanceId;
+            const statusInfo = this.statusCache[instanceId];
             
             if (statusInfo) {
                 this.updateInstanceStatusDisplay(row, statusInfo);
@@ -98,9 +98,9 @@ class InstanceStatusManager {
         if (!statusIndicator) {
             statusIndicator = this.createStatusIndicator();
             // 插入到实例名称后面
-            const nameCell = row.querySelector('.instance-name');
-            if (nameCell) {
-                nameCell.appendChild(statusIndicator);
+            const nameElement = row.querySelector('strong');
+            if (nameElement) {
+                nameElement.parentNode.insertBefore(statusIndicator, nameElement.nextSibling);
             }
         }
 
@@ -122,7 +122,7 @@ class InstanceStatusManager {
         if (!statusText) {
             statusText = document.createElement('span');
             statusText.className = 'status-text ms-2';
-            statusIndicator.parentNode.appendChild(statusText);
+            statusIndicator.parentNode.insertBefore(statusText, statusIndicator.nextSibling);
         }
         
         statusText.textContent = statusConfig.text;
@@ -140,7 +140,7 @@ class InstanceStatusManager {
             
             // 显示状态变化通知
             if (row.dataset.lastStatus) {
-                this.showStatusChangeNotification(row.dataset.instanceName, statusInfo.status, statusConfig.text);
+                this.showStatusChangeNotification(row.dataset.instanceId, statusInfo.status, statusConfig.text);
             }
         }
         
@@ -170,9 +170,9 @@ class InstanceStatusManager {
         // 点击显示详情
         indicator.addEventListener('click', (e) => {
             e.stopPropagation();
-            const row = e.target.closest('.instance-row');
+            const row = e.target.closest('.instance-item');
             if (row) {
-                this.showStatusDetails(row.dataset.instanceName);
+                this.showStatusDetails(row.dataset.instanceId);
             }
         });
         
@@ -215,9 +215,9 @@ class InstanceStatusManager {
         `;
         
         // 插入到实例列表前面
-        const instancesContainer = document.querySelector('.instances-container');
-        if (instancesContainer) {
-            instancesContainer.insertBefore(filterContainer, instancesContainer.firstChild);
+        const instancesContainer = document.querySelector('#instancesList');
+        if (instancesContainer && instancesContainer.parentNode) {
+            instancesContainer.parentNode.insertBefore(filterContainer, instancesContainer);
         }
         
         // 绑定筛选事件
@@ -231,7 +231,7 @@ class InstanceStatusManager {
      * 应用状态筛选
      */
     applyStatusFilter() {
-        document.querySelectorAll('.instance-row').forEach(row => {
+        document.querySelectorAll('.instance-item').forEach(row => {
             const statusInfo = JSON.parse(row.dataset.statusInfo || '{}');
             const shouldShow = this.filterStatus === 'all' || statusInfo.status === this.filterStatus;
             
@@ -460,8 +460,17 @@ let instanceStatusManager = null;
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
     // 检查是否在实例管理页面
-    if (document.querySelector('.instances-container')) {
+    if (document.querySelector('#instancesList')) {
         instanceStatusManager = new InstanceStatusManager();
+        
+        // 等待实例列表加载后再初始化状态显示
+        const checkInstancesLoaded = setInterval(() => {
+            const instanceItems = document.querySelectorAll('#instancesList .instance-item');
+            if (instanceItems.length > 0) {
+                clearInterval(checkInstancesLoaded);
+                instanceStatusManager.updateAllInstancesStatus();
+            }
+        }, 1000);
     }
 });
 

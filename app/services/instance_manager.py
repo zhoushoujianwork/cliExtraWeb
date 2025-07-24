@@ -225,8 +225,18 @@ class InstanceManager:
             status_info = {}
             with self._lock:
                 for instance_id, instance in self.instances.items():
-                    status_info[instance_id] = self._get_instance_status(instance)
+                    try:
+                        status_info[instance_id] = self._get_instance_status(instance)
+                    except Exception as e:
+                        logger.error(f"获取实例 {instance_id} 状态失败: {e}")
+                        status_info[instance_id] = {
+                            'status': 'error',
+                            'color': 'red',
+                            'description': f'状态检查失败: {str(e)}',
+                            'last_activity': instance.created_at if hasattr(instance, 'created_at') else ''
+                        }
             
+            logger.info(f"获取到 {len(status_info)} 个实例状态")
             return status_info
         except Exception as e:
             logger.error(f"获取实例状态失败: {e}")
