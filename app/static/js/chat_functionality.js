@@ -1404,8 +1404,8 @@ function updateInputPlaceholder() {
     messageInput.placeholder = `输入消息 (默认发送给 ${systemTarget}，@all 广播，@实例名 指定发送)`;
 }
 
-// 在页面加载和namespace切换时更新提示
-document.addEventListener('DOMContentLoaded', function() {
+// 初始化输入框提示功能
+function initInputPlaceholder() {
     updateInputPlaceholder();
     
     // 监听namespace变化
@@ -1426,4 +1426,4 @@ document.addEventListener('DOMContentLoaded', function() {
             subtree: true
         });
     }
-});
+}

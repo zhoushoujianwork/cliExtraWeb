@@ -920,6 +920,9 @@
 <!-- 实例状态管理 -->
 <script src="{{ url_for('static', filename='js/instance-status.js') }}"></script>
 
+<!-- JavaScript调试工具 -->
+<script src="{{ url_for('static', filename='js/debug-helper.js') }}"></script>
+
 <!-- 聊天功能 -->
 <script src="{{ url_for('static', filename='js/chat_functionality.js') }}"></script>
 
@@ -1412,10 +1415,16 @@ function refreshNamespaceStats() {
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
-    initSocket();
-    initTerminal();
-    initAutoResizeTextarea();
-    initToolbar(); // 初始化工具栏
+    console.log('🚀 页面初始化开始');
+    
+    // 基础初始化（这些函数应该总是存在的）
+    safeCall('initSocket');
+    safeCall('initTerminal');
+    safeCall('initAutoResizeTextarea');
+    
+    // 延迟初始化（可能需要等待脚本加载）
+    delayedSafeCall('initToolbar', 500, 3);
+    delayedSafeCall('initInputPlaceholder', 500, 3);
     
     // 添加路径类型切换监听器
     const localPathRadio = document.getElementById('localPath');
