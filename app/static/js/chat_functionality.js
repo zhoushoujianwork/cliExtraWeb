@@ -179,8 +179,6 @@ async function sendToSystemInstance(systemTarget, message) {
     } catch (error) {
         console.error('发送给system实例异常:', error);
         showNotification('发送消息失败', 'error');
-    }
-}
             console.log(`发送消息给实例 ${instanceId}:`, message);
             
             const response = await fetch('/api/send', {
@@ -204,11 +202,7 @@ async function sendToSystemInstance(systemTarget, message) {
                 console.error(`❌ 发送失败给实例 ${instanceId}:`, result.error);
                 addSystemMessage(`发送失败给实例 ${instanceId}: ${result.error}`);
             }
-        } catch (error) {
-            console.error(`❌ 发送错误给实例 ${instanceId}:`, error);
-            addSystemMessage(`发送错误给实例 ${instanceId}: ${error.message}`);
         }
-    }
 }
 
 // 广播给所有实例
@@ -342,10 +336,13 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// @功能的自动完成
+// @功能的自动完成 - 优化版
 function setupAtCompletion() {
     const messageInput = document.getElementById('messageInput');
     if (!messageInput) return;
+    
+    let currentSelectedIndex = -1; // 当前选中的选项索引
+    let suggestionItems = []; // 当前显示的建议项
     
     messageInput.addEventListener('input', function(e) {
         const value = e.target.value;
@@ -363,22 +360,98 @@ function setupAtCompletion() {
         }
     });
     
-    // 移除重复的键盘事件监听器，由 initAutoResizeTextarea 统一处理
+    // 键盘导航支持
+    messageInput.addEventListener('keydown', function(e) {
+        const suggestionBox = document.getElementById('instanceSuggestions');
+        if (!suggestionBox || suggestionBox.style.display === 'none') return;
+        
+        switch(e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                navigateSuggestions(1);
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                navigateSuggestions(-1);
+                break;
+            case 'Enter':
+                e.preventDefault();
+                if (window.currentSelectedIndex >= 0 && window.suggestionItems[window.currentSelectedIndex]) {
+                    selectSuggestion(window.suggestionItems[window.currentSelectedIndex]);
+                }
+                break;
+            case 'Escape':
+                e.preventDefault();
+                hideInstanceSuggestions();
+                break;
+        }
+    });
+    
+    // 导航建议选项
+    function navigateSuggestions(direction) {
+        if (!window.suggestionItems || window.suggestionItems.length === 0) return;
+        
+        // 移除当前高亮
+        if (window.currentSelectedIndex >= 0) {
+            window.suggestionItems[window.currentSelectedIndex].classList.remove('selected');
+        }
+        
+        // 计算新索引（支持循环）
+        window.currentSelectedIndex += direction;
+        if (window.currentSelectedIndex >= window.suggestionItems.length) {
+            window.currentSelectedIndex = 0;
+        } else if (window.currentSelectedIndex < 0) {
+            window.currentSelectedIndex = window.suggestionItems.length - 1;
+        }
+        
+        // 高亮新选项
+        window.suggestionItems[window.currentSelectedIndex].classList.add('selected');
+        
+        // 滚动到可见区域
+        window.suggestionItems[window.currentSelectedIndex].scrollIntoView({
+            block: 'nearest',
+            behavior: 'smooth'
+        });
+    }
 }
 
-// 显示实例建议
+// 显示实例建议 - 优化版
 function showInstanceSuggestions(query, atPosition) {
-    // 获取匹配的实例
-    const matches = availableInstances.filter(instance => 
-        instance.id.toLowerCase().includes(query)
-    );
+    // 获取当前namespace的实例
+    const currentNamespace = getCurrentNamespace() || 'q_cli';
     
-    if (matches.length === 0) {
+    // 构建建议列表：all选项 + 匹配的实例
+    let suggestions = [];
+    
+    // 添加all选项（如果查询匹配）
+    if ('all'.includes(query)) {
+        suggestions.push({
+            id: 'all',
+            type: 'broadcast',
+            status: '广播',
+            namespace: currentNamespace,
+            isSpecial: true
+        });
+    }
+    
+    // 添加匹配的实例，按状态排序
+    const matchingInstances = availableInstances
+        .filter(instance => instance.id.toLowerCase().includes(query))
+        .sort((a, b) => {
+            // idle状态优先
+            if (a.status === 'idle' && b.status !== 'idle') return -1;
+            if (b.status === 'idle' && a.status !== 'idle') return 1;
+            return a.id.localeCompare(b.id);
+        });
+    
+    suggestions = suggestions.concat(matchingInstances);
+    
+    if (suggestions.length === 0) {
         hideInstanceSuggestions();
         return;
     }
     
-    // 创建建议列表
+    // 创建或更新建议列表
     let suggestionBox = document.getElementById('instanceSuggestions');
     if (!suggestionBox) {
         suggestionBox = document.createElement('div');
@@ -386,24 +459,164 @@ function showInstanceSuggestions(query, atPosition) {
         suggestionBox.className = 'instance-suggestions position-absolute bg-white border rounded shadow-sm';
         suggestionBox.style.cssText = `
             z-index: 1000;
-            max-height: 200px;
+            max-height: 250px;
             overflow-y: auto;
-            min-width: 200px;
+            min-width: 250px;
+            display: block;
         `;
         document.body.appendChild(suggestionBox);
     }
     
-    suggestionBox.innerHTML = matches.map(instance => `
-        <div class="suggestion-item p-2 border-bottom cursor-pointer" data-instance-id="${instance.id}">
-            <strong>${instance.id}</strong>
-            <small class="text-muted ms-2">${instance.status}</small>
-        </div>
-    `).join('');
+    // 生成建议项HTML
+    suggestionBox.innerHTML = suggestions.map((item, index) => {
+        const isSpecial = item.isSpecial;
+        const statusIcon = getStatusIcon(item.status);
+        const statusColor = getStatusColor(item.status);
+        
+        return `
+            <div class="suggestion-item p-2 border-bottom cursor-pointer d-flex align-items-center" 
+                 data-instance-id="${item.id}" 
+                 data-index="${index}"
+                 style="transition: background-color 0.2s;">
+                ${isSpecial ? 
+                    `<i class="fas fa-broadcast-tower text-primary me-2"></i>` : 
+                    `<span class="status-dot me-2" style="background-color: ${statusColor};"></span>`
+                }
+                <div class="flex-grow-1">
+                    <strong class="${isSpecial ? 'text-primary' : ''}">${item.id}</strong>
+                    <small class="text-muted ms-2">${item.status}</small>
+                    ${item.namespace ? `<small class="text-muted ms-1">(${item.namespace})</small>` : ''}
+                </div>
+                ${isSpecial ? '<span class="badge bg-primary">广播</span>' : ''}
+            </div>
+        `;
+    }).join('');
+    
+    // 绑定点击事件
+    const suggestionItems = suggestionBox.querySelectorAll('.suggestion-item');
+    suggestionItems.forEach((item, index) => {
+        item.addEventListener('click', () => {
+            selectSuggestion(item);
+        });
+        
+        // 鼠标悬停高亮
+        item.addEventListener('mouseenter', () => {
+            // 移除其他高亮
+            suggestionItems.forEach(si => si.classList.remove('selected'));
+            // 添加当前高亮
+            item.classList.add('selected');
+            currentSelectedIndex = index;
+        });
+    });
+    
+    // 更新全局变量
+    window.suggestionItems = Array.from(suggestionItems);
+    window.currentSelectedIndex = -1;
     
     // 定位建议框
+    positionSuggestionBox(suggestionBox);
+    
+    // 显示建议框
+    suggestionBox.style.display = 'block';
+}
+
+// 获取状态图标
+function getStatusIcon(status) {
+    const icons = {
+        'idle': '🟢',
+        'busy': '🟠', 
+        'waiting': '🔵',
+        'error': '🔴',
+        'stopped': '⚫',
+        '广播': '📢'
+    };
+    return icons[status] || '⚪';
+}
+
+// 获取状态颜色
+function getStatusColor(status) {
+    const colors = {
+        'idle': '#28a745',
+        'busy': '#ff8c00',
+        'waiting': '#007bff', 
+        'error': '#dc3545',
+        'stopped': '#6c757d',
+        '广播': '#007bff'
+    };
+    return colors[status] || '#6c757d';
+}
+
+// 定位建议框
+function positionSuggestionBox(suggestionBox) {
     const messageInput = document.getElementById('messageInput');
     const rect = messageInput.getBoundingClientRect();
-    suggestionBox.style.left = rect.left + 'px';
+    
+    // 计算位置
+    const left = rect.left;
+    const top = rect.bottom + 5; // 输入框下方5px
+    
+    suggestionBox.style.left = left + 'px';
+    suggestionBox.style.top = top + 'px';
+    
+    // 确保不超出视窗
+    const boxRect = suggestionBox.getBoundingClientRect();
+    if (boxRect.right > window.innerWidth) {
+        suggestionBox.style.left = (window.innerWidth - boxRect.width - 10) + 'px';
+    }
+    if (boxRect.bottom > window.innerHeight) {
+        suggestionBox.style.top = (rect.top - boxRect.height - 5) + 'px';
+    }
+}
+
+// 选择建议项
+function selectSuggestion(item) {
+    const instanceId = item.dataset.instanceId;
+    insertAtMention(instanceId);
+    hideInstanceSuggestions();
+}
+
+// 插入@提及到输入框
+function insertAtMention(instanceId) {
+    const messageInput = document.getElementById('messageInput');
+    if (!messageInput) return;
+    
+    const value = messageInput.value;
+    const cursorPos = messageInput.selectionStart;
+    
+    // 找到@符号的位置
+    const beforeCursor = value.substring(0, cursorPos);
+    const atMatch = beforeCursor.match(/@(\w*)$/);
+    
+    if (atMatch) {
+        const atStart = cursorPos - atMatch[0].length;
+        const beforeAt = value.substring(0, atStart);
+        const afterCursor = value.substring(cursorPos);
+        
+        // 构建新的值
+        const newValue = beforeAt + '@' + instanceId + ' ' + afterCursor;
+        messageInput.value = newValue;
+        
+        // 设置光标位置到@mention后面
+        const newCursorPos = atStart + instanceId.length + 2; // @instanceId + space
+        messageInput.setSelectionRange(newCursorPos, newCursorPos);
+        
+        // 聚焦输入框
+        messageInput.focus();
+        
+        // 触发input事件以更新其他功能
+        messageInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+}
+
+// 隐藏建议列表
+function hideInstanceSuggestions() {
+    const suggestionBox = document.getElementById('instanceSuggestions');
+    if (suggestionBox) {
+        suggestionBox.style.display = 'none';
+    }
+    window.currentSelectedIndex = -1;
+    window.suggestionItems = [];
+}
     suggestionBox.style.top = (rect.top - suggestionBox.offsetHeight - 5) + 'px';
     
     // 添加点击事件
@@ -999,6 +1212,9 @@ function initToolbar() {
         // 定期更新状态（处理动态内容变化）
         setInterval(updateToolbarButtonStates, 2000);
     }
+    
+    // 初始化@功能自动补全
+    setupAtCompletion();
 }
 
 // ==================== 快捷键功能函数 ====================

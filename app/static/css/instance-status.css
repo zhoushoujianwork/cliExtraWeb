@@ -20,6 +20,83 @@
     margin-left: 4px;
 }
 
+/* @功能自动补全样式 */
+.instance-suggestions {
+    border: 1px solid #dee2e6;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    max-height: 250px;
+    overflow-y: auto;
+    min-width: 250px;
+    z-index: 1000;
+}
+
+.suggestion-item {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f1f3f4;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-item:hover,
+.suggestion-item.selected {
+    background-color: #f8f9fa;
+}
+
+.suggestion-item.selected {
+    background-color: #e3f2fd;
+    border-left: 3px solid #2196f3;
+}
+
+.status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.suggestion-item .badge {
+    font-size: 0.7em;
+    padding: 2px 6px;
+}
+
+/* 广播选项特殊样式 */
+.suggestion-item[data-instance-id="all"] {
+    background: linear-gradient(90deg, #e3f2fd 0%, #f8f9fa 100%);
+    border-left: 3px solid #2196f3;
+}
+
+.suggestion-item[data-instance-id="all"]:hover {
+    background: linear-gradient(90deg, #bbdefb 0%, #e3f2fd 100%);
+}
+
+/* 滚动条样式 */
+.instance-suggestions::-webkit-scrollbar {
+    width: 6px;
+}
+
+.instance-suggestions::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.instance-suggestions::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.instance-suggestions::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
     .status-text {
@@ -30,5 +107,14 @@
         width: 6px;
         height: 6px;
         margin-left: 6px;
+    }
+    
+    .instance-suggestions {
+        min-width: 200px;
+        max-width: calc(100vw - 20px);
+    }
+    
+    .suggestion-item {
+        padding: 10px 12px;
     }
 }
