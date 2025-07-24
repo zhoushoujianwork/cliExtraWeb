@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Q Chat Manager - 主应用入口
 """
@@ -8,6 +9,9 @@ from app.utils.logger import setup_logging
 
 # 获取配置环境
 config_name = os.environ.get('FLASK_ENV', 'development')
+
+# 获取端口配置
+port = int(os.environ.get('PORT', 5001))
 
 # 创建应用
 app = create_app()
@@ -20,7 +24,7 @@ if __name__ == '__main__':
     socketio.run(
         app, 
         host='0.0.0.0', 
-        port=5001, 
+        port=port, 
         debug=True,
         allow_unsafe_werkzeug=True
     )

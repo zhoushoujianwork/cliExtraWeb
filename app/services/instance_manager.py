@@ -725,52 +725,53 @@ class InstanceManager:
     
     def _analyze_send_error(self, return_code: int, stdout: str, stderr: str, instance_id: str) -> Dict[str, str]:
         """分析发送错误并返回用户友好的错误信息"""
-        error_output = (stderr or stdout or '').lower()
-        
-        # 常见错误模式分析
-        if 'not found' in error_output or 'does not exist' in error_output:
-            return {
-                'user_message': f'实例 {instance_id} 不存在或未运行，请检查实例名称',
-                'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
-            }
-        elif 'busy' in error_output or 'processing' in error_output:
-            return {
-                'user_message': '目标实例正忙，请稍后再试',
-                'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
-            }
-        elif 'timeout' in error_output:
-            return {
-                'user_message': '实例响应超时，可能负载过高',
-                'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
-            }
-        elif 'permission' in error_output or 'access denied' in error_output:
-            return {
-                'user_message': '权限不足，无法发送消息到该实例',
-                'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
-            }
-        elif 'connection' in error_output or 'network' in error_output:
-            return {
-                'user_message': '网络连接问题，无法连接到实例',
-                'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
-            }
-        elif return_code == 1:
-            return {
-                'user_message': '命令执行失败，请检查实例状态和参数',
-                'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
-            }
-        elif return_code == 2:
-            return {
-                'user_message': '命令参数错误，请联系管理员',
-                'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
-            }
-        else:
-            return {
-                'user_message': f'发送失败，错误代码: {return_code}。请稍后重试或联系管理员',
-                'technical_details': f'Return code: {return_code}, Stdout: {stdout}, Stderr: {stderr}'
-            }
+        try:
+            error_output = (stderr or stdout or '').lower()
+            
+            # 常见错误模式分析
+            if 'not found' in error_output or 'does not exist' in error_output:
+                return {
+                    'user_message': f'实例 {instance_id} 不存在或未运行，请检查实例名称',
+                    'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
+                }
+            elif 'busy' in error_output or 'processing' in error_output:
+                return {
+                    'user_message': '目标实例正忙，请稍后再试',
+                    'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
+                }
+            elif 'timeout' in error_output:
+                return {
+                    'user_message': '实例响应超时，可能负载过高',
+                    'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
+                }
+            elif 'permission' in error_output or 'access denied' in error_output:
+                return {
+                    'user_message': '权限不足，无法发送消息到该实例',
+                    'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
+                }
+            elif 'connection' in error_output or 'network' in error_output:
+                return {
+                    'user_message': '网络连接问题，无法连接到实例',
+                    'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
+                }
+            elif return_code == 1:
+                return {
+                    'user_message': '命令执行失败，请检查实例状态和参数',
+                    'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
+                }
+            elif return_code == 2:
+                return {
+                    'user_message': '命令参数错误，请联系管理员',
+                    'technical_details': f'Return code: {return_code}, Output: {stderr or stdout}'
+                }
+            else:
+                return {
+                    'user_message': f'发送失败，错误代码: {return_code}。请稍后重试或联系管理员',
+                    'technical_details': f'Return code: {return_code}, Stdout: {stdout}, Stderr: {stderr}'
+                }
         except Exception as e:
             logger.error(f'💥 向cliExtra实例 {instance_id} 发送消息异常: {str(e)}')
-            logger.error(f'🔧 失败命令: qq send {instance_id} "{message}"')
+            logger.error(f'🔧 分析错误详情: return_code={return_code}, stdout={stdout}, stderr={stderr}')
             logger.error(f'📋 异常类型: {type(e).__name__}')
             return {'success': False, 'error': str(e)}
     

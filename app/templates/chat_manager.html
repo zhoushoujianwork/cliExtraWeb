@@ -484,7 +484,7 @@
             <button class="btn btn-sm btn-info" onclick="window.open('/workflow', '_blank')" title="Workflow 管理">
                 <i class="fas fa-project-diagram"></i> Workflow
             </button>
-            <button class="btn btn-sm btn-primary" onclick="manualRefresh()">
+            <button class="btn btn-sm btn-primary" onclick="manualRefresh()" title="刷新所有数据：实例列表、状态信息、聊天记录等">
                 <i class="fas fa-refresh"></i> 刷新
             </button>
         </div>
@@ -499,9 +499,7 @@
             <div class="card-header d-flex justify-content-between align-items-center flex-shrink-0">
                 <h5 class="mb-0"><i class="fas fa-server"></i> Q CLI 实例</h5>
                 <div class="btn-group btn-group-sm">
-                    <button class="btn btn-primary" onclick="manualRefresh()" title="刷新实例列表">
-                        <i class="fas fa-sync-alt"></i>
-                    </button>
+                    <!-- 移除刷新按钮，统一使用右上角刷新 -->
                     <button class="btn btn-success" onclick="createInstance()" title="创建新实例">
                         <i class="fas fa-plus"></i>
                     </button>
@@ -550,9 +548,7 @@
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="fas fa-comments"></i> 聊天记录</h5>
                 <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-primary" onclick="refreshChatCache()" title="刷新历史记录缓存">
-                        <i class="fas fa-sync-alt"></i> 刷新缓存
-                    </button>
+                    <!-- 移除刷新缓存按钮，统一使用右上角刷新 -->
                     <button class="btn btn-outline-secondary" onclick="clearChatHistory()" title="清空当前显示的聊天记录">
                         <i class="fas fa-trash"></i> 清空
                     </button>
@@ -1336,41 +1332,75 @@ function stopInstance(instanceId) {
     }
 }
 
-// 手动刷新
+// 统一刷新功能 - 整合所有刷新操作
 function manualRefresh() {
-    console.log('执行手动刷新...');
+    console.log('🔄 执行统一刷新...');
     
     // 显示刷新按钮的加载状态
-    const refreshBtn = document.querySelector('button[onclick="manualRefresh()"]');
-    if (refreshBtn) {
-        const originalHTML = refreshBtn.innerHTML;
-        refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-        refreshBtn.disabled = true;
-        
-        // 恢复按钮状态
-        setTimeout(() => {
-            refreshBtn.innerHTML = originalHTML;
-            refreshBtn.disabled = false;
-        }, 1000);
-    }
+    const refreshBtns = document.querySelectorAll('button[onclick="manualRefresh()"]');
+    refreshBtns.forEach(btn => {
+        if (btn) {
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 刷新中...';
+            btn.disabled = true;
+            
+            // 恢复按钮状态
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }, 3000);
+        }
+    });
     
-    // 如果有namespace管理器，使用全面刷新
+    // 1. 刷新实例列表和状态
+    console.log('📋 刷新实例列表...');
     if (typeof refreshAllPageComponents === 'function') {
         refreshAllPageComponents();
     } else if (typeof loadInstancesWithNamespace === 'function') {
         loadInstancesWithNamespace();
     } else {
-        // 备用刷新方法
         loadInstances();
     }
     
-    // 显示刷新提示
-    if (typeof showNotification === 'function') {
-        showNotification('实例列表已刷新', 'success', 2000);
-    } else {
-        // 备用提示方法
-        console.log('实例列表已刷新');
+    // 2. 刷新聊天记录缓存
+    console.log('💬 刷新聊天记录...');
+    if (typeof refreshChatCache === 'function') {
+        refreshChatCache();
     }
+    
+    // 3. 刷新实例状态
+    console.log('📊 刷新实例状态...');
+    if (typeof instanceStatusManager !== 'undefined' && instanceStatusManager) {
+        instanceStatusManager.updateAllInstancesStatus();
+    }
+    
+    // 4. 刷新namespace信息
+    console.log('🏷️ 刷新namespace信息...');
+    if (typeof refreshNamespaceStats === 'function') {
+        refreshNamespaceStats();
+    }
+    
+    // 5. 重新获取可用实例列表（用于@功能）
+    console.log('🔗 刷新可用实例列表...');
+    if (typeof updateAvailableInstances === 'function') {
+        fetch('/api/instances')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateAvailableInstances(data.instances);
+                }
+            })
+            .catch(error => console.error('刷新可用实例失败:', error));
+    }
+    
+    // 显示统一刷新完成提示
+    if (typeof showNotification === 'function') {
+        showNotification('🔄 页面数据已全部刷新', 'success', 3000);
+    } else {
+        console.log('✅ 统一刷新完成');
+    }
+    
+    console.log('✅ 统一刷新操作完成');
 }
 
 // Namespace切换辅助函数
