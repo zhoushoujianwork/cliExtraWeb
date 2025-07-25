@@ -714,48 +714,7 @@ function clearInstanceSelection() {
         instancesList.focus();
     }
 }
-                        <i class="fas fa-info-circle"></i>
-                    </button>
-                    <button class="btn btn-outline-danger" onclick="cleanInstance('${instance.id}')" title="清理实例数据">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-        `;
-        instancesList.appendChild(instanceDiv);
-    });
-    
-    // 更新聊天功能的可用实例列表
-    if (typeof updateAvailableInstances === 'function') {
-        updateAvailableInstances(instances);
-    }
-    
-    // 尝试自动恢复当前namespace的上次选择的实例
-    console.log('🔄 [DEBUG] 准备自动恢复实例选择');
-    console.log('🔍 [DEBUG] window.terminalMemory存在:', !!window.terminalMemory);
-    console.log('🔍 [DEBUG] currentNamespace:', currentNamespace);
-    
-    if (window.terminalMemory && currentNamespace) {
-        const result = window.terminalMemory.autoRestoreTerminalSelection(
-            instances,
-            (instanceId) => {
-                console.log('🔄 自动恢复终端监控回调执行:', instanceId, 'namespace:', currentNamespace);
-                // 只有在监控函数存在时才调用
-                if (typeof startMonitoring === 'function') {
-                    console.log('✅ [DEBUG] 调用startMonitoring:', instanceId);
-                    startMonitoring(instanceId);
-                } else {
-                    console.log('⚠️ startMonitoring 函数不可用，跳过自动恢复');
-                }
-            },
-            currentNamespace // 传入当前namespace
-        );
-        console.log('🔍 [DEBUG] updateInstancesList中的autoRestore返回:', result);
-    } else {
-        console.log('❌ [DEBUG] 自动恢复条件不满足');
-    }
-}
-
+                      
 /**
  * 更新实例列表中的选中状态
  * @param {string} selectedInstanceId - 当前选中的实例ID，null表示没有选中

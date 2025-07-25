@@ -651,75 +651,135 @@ class InstanceManager:
             return {'success': False, 'error': f'发送消息时发生系统错误: {str(e)}'}
     
     def _check_instance_status_for_send(self, instance_id: str) -> Dict[str, any]:
-        """检查实例状态是否可以发送消息"""
+        """检查实例状态是否可以发送消息 - 使用qq list获取状态"""
         try:
-            # 使用qq status命令检查实例状态
-            cmd = ['qq', 'status', instance_id]
+            # 使用qq list命令获取所有实例状态，然后查找目标实例
+            cmd = ['qq', 'list', '-o', 'json']
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=10,
                 encoding='utf-8',
                 errors='replace'
             )
             
             logger.debug(f'状态检查命令: {" ".join(cmd)}')
             logger.debug(f'状态检查返回码: {result.returncode}')
-            logger.debug(f'状态检查输出: {result.stdout}')
+            logger.debug(f'状态检查输出: {result.stdout[:200]}...')
             
             if result.returncode == 0:
-                # 解析状态输出
-                status_output = result.stdout.strip().lower()
-                
-                if 'idle' in status_output or 'available' in status_output:
-                    return {
-                        'can_send': True,
-                        'reason': '实例状态正常，可以发送消息',
-                        'status_info': {'status': 'idle', 'output': result.stdout}
-                    }
-                elif 'busy' in status_output or 'processing' in status_output:
+                try:
+                    # 解析JSON输出
+                    instances_data = json.loads(result.stdout)
+                    
+                    # 查找目标实例
+                    target_instance = None
+                    if isinstance(instances_data, list):
+                        # 如果返回的是实例列表
+                        for instance in instances_data:
+                            if isinstance(instance, dict) and instance.get('id') == instance_id:
+                                target_instance = instance
+                                break
+                    elif isinstance(instances_data, dict):
+                        # 如果返回的是包含实例列表的对象
+                        instances_list = instances_data.get('instances', [])
+                        for instance in instances_list:
+                            if isinstance(instance, dict) and instance.get('id') == instance_id:
+                                target_instance = instance
+                                break
+                    
+                    if target_instance:
+                        # 从qq list输出中获取状态信息
+                        instance_status = target_instance.get('status', '').lower()
+                        
+                        # 判断是否可以发送消息
+                        if 'idle' in instance_status or 'available' in instance_status or instance_status == 'attached':
+                            return {
+                                'can_send': True,
+                                'reason': '实例状态正常，可以发送消息',
+                                'status_info': {
+                                    'status': 'idle', 
+                                    'raw_status': target_instance.get('status', ''),
+                                    'instance_data': target_instance
+                                }
+                            }
+                        elif 'busy' in instance_status or 'processing' in instance_status:
+                            return {
+                                'can_send': False,
+                                'reason': '目标实例正忙，请稍后再试',
+                                'status_info': {
+                                    'status': 'busy', 
+                                    'raw_status': target_instance.get('status', ''),
+                                    'instance_data': target_instance
+                                }
+                            }
+                        else:
+                            # 状态不明确，但允许发送
+                            return {
+                                'can_send': True,
+                                'reason': f'实例状态为 {target_instance.get("status", "unknown")}，尝试发送',
+                                'status_info': {
+                                    'status': 'unknown', 
+                                    'raw_status': target_instance.get('status', ''),
+                                    'instance_data': target_instance
+                                }
+                            }
+                    else:
+                        # 未找到目标实例
+                        return {
+                            'can_send': False,
+                            'reason': f'实例 {instance_id} 不存在或未运行',
+                            'status_info': {'status': 'not_found', 'searched_in': len(instances_data) if isinstance(instances_data, list) else 'unknown'}
+                        }
+                        
+                except json.JSONDecodeError as e:
+                    logger.error(f'解析qq list JSON输出失败: {e}')
+                    # JSON解析失败，尝试解析文本输出
+                    output_lines = result.stdout.strip().split('\n')
+                    for line in output_lines:
+                        if instance_id in line:
+                            # 简单的文本匹配，允许发送
+                            return {
+                                'can_send': True,
+                                'reason': f'在文本输出中找到实例 {instance_id}，允许发送',
+                                'status_info': {'status': 'found_in_text', 'line': line}
+                            }
+                    
                     return {
                         'can_send': False,
-                        'reason': '目标实例正忙，请稍后再试',
-                        'status_info': {'status': 'busy', 'output': result.stdout}
-                    }
-                else:
-                    # 状态不明确，但允许发送
-                    return {
-                        'can_send': True,
-                        'reason': '实例状态未知，尝试发送',
-                        'status_info': {'status': 'unknown', 'output': result.stdout}
+                        'reason': f'无法解析实例状态信息，JSON错误: {str(e)}',
+                        'status_info': {'status': 'parse_error', 'error': str(e)}
                     }
             else:
-                # 状态检查失败，可能实例不存在
+                # qq list命令执行失败
                 error_output = result.stderr or result.stdout or '无错误信息'
                 if 'not found' in error_output.lower() or 'does not exist' in error_output.lower():
                     return {
                         'can_send': False,
-                        'reason': f'实例 {instance_id} 不存在或未运行',
-                        'status_info': {'status': 'not_found', 'error': error_output}
+                        'reason': f'qq list命令失败，可能没有实例运行',
+                        'status_info': {'status': 'list_failed', 'error': error_output}
                     }
                 else:
                     # 其他错误，允许尝试发送
                     return {
                         'can_send': True,
-                        'reason': '状态检查失败，但允许尝试发送',
-                        'status_info': {'status': 'check_failed', 'error': error_output}
+                        'reason': 'qq list命令失败，但允许尝试发送',
+                        'status_info': {'status': 'list_error', 'error': error_output}
                     }
                     
         except subprocess.TimeoutExpired:
-            logger.warning(f'实例 {instance_id} 状态检查超时')
+            logger.warning(f'qq list命令超时')
             return {
                 'can_send': True,
-                'reason': '状态检查超时，允许尝试发送',
+                'reason': 'qq list命令超时，允许尝试发送',
                 'status_info': {'status': 'timeout'}
             }
         except Exception as e:
             logger.error(f'状态检查异常: {e}')
             return {
                 'can_send': True,
-                'reason': '状态检查异常，允许尝试发送',
+                'reason': 'qq list状态检查异常，允许尝试发送',
                 'status_info': {'status': 'error', 'error': str(e)}
             }
     
