@@ -532,6 +532,27 @@
     background-color: #e1f5fe;
     border-color: #1976d2;
 }
+
+/* 键盘导航选中状态 */
+.instance-item.keyboard-selected {
+    background-color: #e3f2fd;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+    transform: translateY(-1px);
+}
+
+.instance-item:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
+    background-color: #f8f9fa;
+}
+
+/* 实例列表容器聚焦样式 */
+#instancesList:focus {
+    outline: 2px solid #007bff;
+    outline-offset: -2px;
+    border-radius: 4px;
+}
 </style>
 {% endblock %}
 
@@ -1648,6 +1669,7 @@ document.addEventListener('DOMContentLoaded', function() {
     delayedSafeCall('initToolbar', 500, 3);
     delayedSafeCall('initInputPlaceholder', 500, 3);
     delayedSafeCall('initChatMessagesResize', 500, 3);
+    delayedSafeCall('initInstanceListKeyboardNavigation', 1000, 3);
     
     // 添加路径类型切换监听器
     const localPathRadio = document.getElementById('localPath');

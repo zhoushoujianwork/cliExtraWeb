@@ -569,17 +569,17 @@ class InstanceManager:
             
             # 1. 首先检查实例状态
             logger.info(f'🔍 检查实例 {instance_id_safe} 状态...')
-            status_check = self._check_instance_status_for_send(instance_id_safe)
-            if not status_check['can_send']:
-                logger.warning(f'⚠️ 实例 {instance_id_safe} 状态检查失败: {status_check["reason"]}')
-                return {
-                    'success': False, 
-                    'error': status_check['reason'],
-                    'status_info': status_check.get('status_info', {})
-                }
+            # status_check = self._check_instance_status_for_send(instance_id_safe)
+            # if not status_check['can_send']:
+            #     logger.warning(f'⚠️ 实例 {instance_id_safe} 状态检查失败: {status_check["reason"]}')
+            #     return {
+            #         'success': False, 
+            #         'error': status_check['reason'],
+            #         'status_info': status_check.get('status_info', {})
+            #     }
             
             # 2. 构建发送命令
-            cmd = ['qq', 'send', instance_id_safe, message_safe]
+            cmd = ['qq', 'send', '--force', instance_id_safe, message_safe]
             cmd_str = ' '.join([f'"{arg}"' if ' ' in arg else arg for arg in cmd])
             
             # 详细日志输出

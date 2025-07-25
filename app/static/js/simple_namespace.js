@@ -456,7 +456,7 @@ function updateInstancesList(instances) {
         return;
     }
     
-    instances.forEach(instance => {
+    instances.forEach((instance, index) => {
         const instanceDiv = document.createElement('div');
         
         // 检查是否是当前监控的实例
@@ -473,6 +473,8 @@ function updateInstancesList(instances) {
         
         instanceDiv.className = instanceClasses;
         instanceDiv.setAttribute('data-instance-id', instance.id);
+        instanceDiv.setAttribute('data-index', index); // 添加索引属性
+        instanceDiv.setAttribute('tabindex', '0'); // 使元素可聚焦
         
         // 根据状态设置不同的样式
         const statusClass = instance.status === 'Attached' ? 'success' : 
@@ -498,6 +500,220 @@ function updateInstancesList(instances) {
                     <button class="btn btn-outline-info" 
                             onclick="showInstanceDetails('${instance.id}')" 
                             title="查看实例详情">
+                        <i class="fas fa-info-circle"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" 
+                            onclick="stopInstance('${instance.id}', this)" 
+                            title="停止实例">
+                        <i class="fas fa-stop"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // 添加键盘事件监听器
+        instanceDiv.addEventListener('keydown', handleInstanceKeydown);
+        
+        // 添加点击事件监听器
+        instanceDiv.addEventListener('click', function(e) {
+            // 如果点击的不是按钮，则选中该实例
+            if (!e.target.closest('button')) {
+                selectInstanceItem(instanceDiv);
+            }
+        });
+        
+        // 添加聚焦事件监听器
+        instanceDiv.addEventListener('focus', function() {
+            selectInstanceItem(instanceDiv);
+        });
+        
+        instancesList.appendChild(instanceDiv);
+    });
+    
+    // 初始化键盘导航
+    initInstanceListKeyboardNavigation();
+    
+    console.log('✅ [DEBUG] updateInstancesList 完成');
+}
+
+// 全局变量用于跟踪当前选中的实例
+let currentSelectedInstanceIndex = -1;
+
+/**
+ * 初始化实例列表键盘导航
+ */
+function initInstanceListKeyboardNavigation() {
+    const instancesList = document.getElementById('instancesList');
+    if (!instancesList) return;
+    
+    // 移除之前的事件监听器（如果存在）
+    instancesList.removeEventListener('keydown', handleInstanceListKeydown);
+    
+    // 添加键盘事件监听器到容器
+    instancesList.addEventListener('keydown', handleInstanceListKeydown);
+    
+    // 设置容器为可聚焦
+    instancesList.setAttribute('tabindex', '0');
+    
+    console.log('✅ 实例列表键盘导航已初始化');
+}
+
+/**
+ * 处理实例列表的键盘事件
+ */
+function handleInstanceListKeydown(e) {
+    const instanceItems = document.querySelectorAll('#instancesList .instance-item');
+    if (instanceItems.length === 0) return;
+    
+    switch(e.key) {
+        case 'ArrowDown':
+            e.preventDefault();
+            navigateInstanceList(1);
+            break;
+        case 'ArrowUp':
+            e.preventDefault();
+            navigateInstanceList(-1);
+            break;
+        case 'Enter':
+            e.preventDefault();
+            activateSelectedInstance();
+            break;
+        case 'Escape':
+            e.preventDefault();
+            clearInstanceSelection();
+            break;
+        case ' ': // 空格键
+            e.preventDefault();
+            activateSelectedInstance();
+            break;
+    }
+}
+
+/**
+ * 处理单个实例项的键盘事件
+ */
+function handleInstanceKeydown(e) {
+    switch(e.key) {
+        case 'Enter':
+        case ' ':
+            e.preventDefault();
+            const instanceId = e.currentTarget.getAttribute('data-instance-id');
+            if (instanceId) {
+                startMonitoringWithMemory(instanceId);
+            }
+            break;
+        case 'ArrowDown':
+            e.preventDefault();
+            navigateInstanceList(1);
+            break;
+        case 'ArrowUp':
+            e.preventDefault();
+            navigateInstanceList(-1);
+            break;
+    }
+}
+
+/**
+ * 导航实例列表
+ */
+function navigateInstanceList(direction) {
+    const instanceItems = Array.from(document.querySelectorAll('#instancesList .instance-item'));
+    if (instanceItems.length === 0) return;
+    
+    // 计算新的选中索引
+    let newIndex = currentSelectedInstanceIndex + direction;
+    
+    // 处理边界情况（循环导航）
+    if (newIndex >= instanceItems.length) {
+        newIndex = 0;
+    } else if (newIndex < 0) {
+        newIndex = instanceItems.length - 1;
+    }
+    
+    // 更新选中状态
+    selectInstanceByIndex(newIndex);
+    
+    console.log(`🔍 导航到实例 ${newIndex}: ${instanceItems[newIndex]?.getAttribute('data-instance-id')}`);
+}
+
+/**
+ * 根据索引选中实例
+ */
+function selectInstanceByIndex(index) {
+    const instanceItems = Array.from(document.querySelectorAll('#instancesList .instance-item'));
+    if (index < 0 || index >= instanceItems.length) return;
+    
+    // 清除之前的选中状态
+    instanceItems.forEach(item => {
+        item.classList.remove('keyboard-selected');
+        item.style.outline = '';
+    });
+    
+    // 设置新的选中状态
+    const selectedItem = instanceItems[index];
+    selectedItem.classList.add('keyboard-selected');
+    selectedItem.style.outline = '2px solid #007bff';
+    selectedItem.style.outlineOffset = '2px';
+    
+    // 滚动到可见区域
+    selectedItem.scrollIntoView({
+        block: 'nearest',
+        behavior: 'smooth'
+    });
+    
+    // 更新全局索引
+    currentSelectedInstanceIndex = index;
+    
+    // 聚焦到选中的项
+    selectedItem.focus();
+}
+
+/**
+ * 选中实例项（通过元素）
+ */
+function selectInstanceItem(instanceElement) {
+    const instanceItems = Array.from(document.querySelectorAll('#instancesList .instance-item'));
+    const index = instanceItems.indexOf(instanceElement);
+    
+    if (index >= 0) {
+        selectInstanceByIndex(index);
+    }
+}
+
+/**
+ * 激活当前选中的实例
+ */
+function activateSelectedInstance() {
+    const instanceItems = Array.from(document.querySelectorAll('#instancesList .instance-item'));
+    if (currentSelectedInstanceIndex >= 0 && currentSelectedInstanceIndex < instanceItems.length) {
+        const selectedItem = instanceItems[currentSelectedInstanceIndex];
+        const instanceId = selectedItem.getAttribute('data-instance-id');
+        
+        if (instanceId) {
+            console.log(`🚀 激活实例: ${instanceId}`);
+            startMonitoringWithMemory(instanceId);
+        }
+    }
+}
+
+/**
+ * 清除实例选择
+ */
+function clearInstanceSelection() {
+    const instanceItems = document.querySelectorAll('#instancesList .instance-item');
+    instanceItems.forEach(item => {
+        item.classList.remove('keyboard-selected');
+        item.style.outline = '';
+    });
+    
+    currentSelectedInstanceIndex = -1;
+    
+    // 聚焦回实例列表容器
+    const instancesList = document.getElementById('instancesList');
+    if (instancesList) {
+        instancesList.focus();
+    }
+}
                         <i class="fas fa-info-circle"></i>
                     </button>
                     <button class="btn btn-outline-danger" onclick="cleanInstance('${instance.id}')" title="清理实例数据">
